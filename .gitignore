@@ -1,2 +1,11 @@
 .vscode/*
 !.vscode/mcp.json
+
+# Local secrets - never commit
+.env
+
+# Dynatrace AI skills (installed via `npx skills add dynatrace/dynatrace-for-ai`)
+# - not tracked, re-fetched per machine
+.agents/skills/dt-*/
+.claude/skills/dt-*/
+skills-lock.json
