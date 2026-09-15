@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+#
+# Configures Dynatrace cost allocation for EasyTrade:
+#   1. Ensures easytrade-frontend/backend/database/other exist in the
+#      account's cost center allowlist.
+#   2. Ensures easytrade-<service> exists in the account's cost product
+#      allowlist for every service under src/.
+#   3. Patches every Deployment/StatefulSet in the "easytrade" namespace with
+#      pod-level metadata.dynatrace.com/dt.cost.costcenter and
+#      metadata.dynatrace.com/dt.cost.product annotations.
+#
+# See: https://docs.dynatrace.com/docs/shortlink/account-api-dps-cost-allocation-manage
+#      https://docs.dynatrace.com/docs/shortlink/tags-domain-k8s#dedicated-annotations
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENV_FILE="${SCRIPT_DIR}/.env"
+NAMESPACE="easytrade"
+API_BASE="https://api.dynatrace.com/v1/accounts"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [--account-uuid UUID] [--platform-token TOKEN]
+
+Inputs are read from ${ENV_FILE} (DT_ACCOUNT_UUID, DT_PLATFORM_TOKEN) by
+default; flags below override the values loaded from that file.
+
+  --account-uuid UUID     Dynatrace account management UUID
+  --platform-token TOKEN  Platform token with account-uac-read/write scopes
+  -h, --help              Show this help
+EOF
+}
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "ERROR: required command '$1' not found in PATH." >&2
+    exit 1
+  fi
+}
+
+require_cmd curl
+require_cmd jq
+require_cmd kubectl
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
+ACCOUNT_UUID="${DT_ACCOUNT_UUID:-}"
+PLATFORM_TOKEN="${DT_PLATFORM_TOKEN:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --account-uuid)
+      ACCOUNT_UUID="$2"
+      shift 2
+      ;;
+    --platform-token)
+      PLATFORM_TOKEN="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown argument '$1'" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "$ACCOUNT_UUID" || -z "$PLATFORM_TOKEN" ]]; then
+  echo "ERROR: account UUID and platform token are required (via ${ENV_FILE} or flags)." >&2
+  usage
+  exit 1
+fi
+
+# Service aliases are derived from src/ so the allowlist and the k8s patch
+# step always agree with the repo's actual services (they map 1:1 to the
+# Helm chart's "app" subchart aliases in helm/easytrade/Chart.yaml).
+ALIASES=()
+for dir in "${REPO_ROOT}/src"/*/; do
+  ALIASES+=("$(basename "$dir")")
+done
+
+# Longest-alias-first so suffix matching below can't be fooled by a shorter
+# alias that happens to be a suffix of a longer one.
+SORTED_ALIASES=()
+while IFS= read -r a; do
+  SORTED_ALIASES+=("$a")
+done < <(printf '%s\n' "${ALIASES[@]}" | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-)
+
+costcenter_for_alias() {
+  case "$1" in
+    frontend|frontendreverseproxy) echo "easytrade-frontend" ;;
+    db) echo "easytrade-database" ;;
+    rabbitmq|loadgen|problem-operator) echo "easytrade-other" ;;
+    *) echo "easytrade-backend" ;;
+  esac
+}
+
+match_alias() {
+  local name="$1" alias
+  for alias in "${SORTED_ALIASES[@]}"; do
+    if [[ "$name" == "$alias" || "$name" == *"-${alias}" ]]; then
+      echo "$alias"
+      return 0
+    fi
+  done
+  return 1
+}
+
+get_existing_keys() {
+  local resource="$1" page=1 page_size=500
+  local response http_code body has_next
+  while true; do
+    response=$(curl -sS -w '\n%{http_code}' \
+      -H "Authorization: Bearer ${PLATFORM_TOKEN}" \
+      "${API_BASE}/${ACCOUNT_UUID}/settings/${resource}?page=${page}&page-size=${page_size}")
+    http_code=$(tail -n1 <<<"$response")
+    body=$(sed '$d' <<<"$response")
+    if [[ "$http_code" != "200" ]]; then
+      echo "ERROR: failed to read ${resource} allowlist (HTTP ${http_code}): ${body}" >&2
+      return 1
+    fi
+    jq -r '.records[].key' <<<"$body"
+    has_next=$(jq -r '.hasNextPage' <<<"$body")
+    [[ "$has_next" == "true" ]] || break
+    page=$((page + 1))
+  done
+}
+
+add_missing_keys() {
+  local resource="$1"
+  shift
+  local missing=("$@")
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "  no new ${resource} entries needed."
+    return 0
+  fi
+  local values_json body response http_code resp_body
+  values_json=$(printf '%s\n' "${missing[@]}" | jq -R '{key: .}' | jq -s '.')
+  body=$(jq -n --argjson values "$values_json" '{values: $values}')
+  response=$(curl -sS -w '\n%{http_code}' -X POST \
+    -H "Authorization: Bearer ${PLATFORM_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$body" \
+    "${API_BASE}/${ACCOUNT_UUID}/settings/${resource}")
+  http_code=$(tail -n1 <<<"$response")
+  resp_body=$(sed '$d' <<<"$response")
+  if [[ "$http_code" != "204" ]]; then
+    echo "ERROR: failed to add ${resource} entries (HTTP ${http_code}): ${resp_body}" >&2
+    return 1
+  fi
+  echo "  added ${resource} entries: ${missing[*]}"
+}
+
+sync_allowlist() {
+  local resource="$1"
+  shift
+  local desired=("$@")
+  local existing=()
+  if ! mapfile -t existing < <(get_existing_keys "$resource"); then
+    return 1
+  fi
+  local missing=() d
+  for d in "${desired[@]}"; do
+    local found=0 e
+    for e in "${existing[@]}"; do
+      [[ "$e" == "$d" ]] && { found=1; break; }
+    done
+    [[ $found -eq 0 ]] && missing+=("$d")
+  done
+  add_missing_keys "$resource" "${missing[@]}"
+}
+
+echo "Syncing cost center allowlist..."
+if ! sync_allowlist costcenters easytrade-frontend easytrade-backend easytrade-database easytrade-other; then
+  echo "Aborting before touching Kubernetes: cost center allowlist sync failed." >&2
+  exit 1
+fi
+
+echo "Syncing cost product allowlist..."
+DESIRED_PRODUCTS=()
+for alias in "${ALIASES[@]}"; do
+  DESIRED_PRODUCTS+=("easytrade-${alias}")
+done
+if ! sync_allowlist products "${DESIRED_PRODUCTS[@]}"; then
+  echo "Aborting before touching Kubernetes: cost product allowlist sync failed." >&2
+  exit 1
+fi
+
+# kubectl wrapper: falls back to sudo only when kubectl itself reports a
+# local permission problem (e.g. an unreadable kubeconfig) - not for
+# cluster-side RBAC "Forbidden" errors, which sudo can't fix.
+run_kubectl() {
+  local output
+  if output=$(kubectl "$@" 2>&1); then
+    printf '%s\n' "$output"
+    return 0
+  fi
+  if echo "$output" | grep -qi "permission denied" && command -v sudo >/dev/null 2>&1; then
+    echo "kubectl hit a permission error; retrying with sudo..." >&2
+    if output=$(sudo kubectl "$@" 2>&1); then
+      printf '%s\n' "$output"
+      return 0
+    fi
+  fi
+  echo "$output" >&2
+  return 1
+}
+
+patch_workload() {
+  local kind="$1" name="$2" alias costcenter product patch
+  if ! alias=$(match_alias "$name"); then
+    echo "  skipping ${kind}/${name}: no matching src/ service alias" >&2
+    return 0
+  fi
+  costcenter=$(costcenter_for_alias "$alias")
+  product="easytrade-${alias}"
+  patch=$(jq -n --arg cc "$costcenter" --arg cp "$product" \
+    '{spec:{template:{metadata:{annotations:{
+      "metadata.dynatrace.com/dt.cost.costcenter": $cc,
+      "metadata.dynatrace.com/dt.cost.product": $cp
+    }}}}}')
+  run_kubectl patch "$kind" "$name" -n "$NAMESPACE" --type=merge -p "$patch" >/dev/null
+  echo "  patched ${kind}/${name} -> costcenter=${costcenter} product=${product}"
+}
+
+echo "Patching workloads in namespace '${NAMESPACE}'..."
+for name in $(run_kubectl get deployments -n "$NAMESPACE" -o jsonpath='{.items[*].metadata.name}'); do
+  patch_workload deployment "$name"
+done
+for name in $(run_kubectl get statefulsets -n "$NAMESPACE" -o jsonpath='{.items[*].metadata.name}'); do
+  patch_workload statefulset "$name"
+done
+
+echo "Done."
