@@ -4,7 +4,7 @@
 #   1. Ensures easytrade-frontend/backend/database/other exist in the
 #      account's cost center allowlist.
 #   2. Ensures easytrade-<service> exists in the account's cost product
-#      allowlist for every service under src/.
+#      allowlist for every service in the hardcoded ALIASES list below.
 #   3. Patches every Deployment/StatefulSet in the "easytrade" namespace with
 #      pod-level metadata.dynatrace.com/dt.cost.costcenter and
 #      metadata.dynatrace.com/dt.cost.product annotations.
@@ -15,20 +15,51 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${SCRIPT_DIR}/.env"
 NAMESPACE="easytrade"
-API_BASE="https://api.dynatrace.com/v1/accounts"
+
+# Service aliases, one per src/ subdirectory as of this writing. Hardcoded
+# rather than listed at runtime so the script doesn't depend on being run
+# from inside a full repo checkout (it's copied around standalone).
+ALIASES=(
+  accountservice
+  aggregator-service
+  broker-service
+  calculationservice
+  contentcreator
+  credit-card-order-service
+  db
+  engine
+  feature-flag-service
+  frontend
+  frontendreverseproxy
+  loadgen
+  loginservice
+  manager
+  offerservice
+  pricing-service
+  problem-operator
+  rabbitmq
+  third-party-service
+)
+
+# Account Management API host varies by account type - prod accounts live on
+# api.dynatrace.com, internal sprint/labs accounts on the hardening host.
+PROD_API_BASE="https://api.dynatrace.com/v1/accounts"
+SPRINT_API_BASE="https://api-hardening.internal.dynatracelabs.com/v1/accounts"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--account-uuid UUID] [--platform-token TOKEN]
+Usage: $(basename "$0") [--account-uuid UUID] [--platform-token TOKEN] [--account-env prod|sprint]
 
-Inputs are read from ${ENV_FILE} (DT_ACCOUNT_UUID, DT_PLATFORM_TOKEN) by
-default; flags below override the values loaded from that file.
+Inputs are read from ${ENV_FILE} (DT_ACCOUNT_UUID, DT_PLATFORM_TOKEN,
+DT_ACCOUNT_ENV) by default; flags below override the values loaded from
+that file.
 
   --account-uuid UUID     Dynatrace account management UUID
   --platform-token TOKEN  Platform token with account-uac-read/write scopes
+  --account-env ENV       "prod" (default) or "sprint" - selects the
+                          Account Management API host
   -h, --help              Show this help
 EOF
 }
@@ -40,8 +71,40 @@ require_cmd() {
   fi
 }
 
+# jq is easy to be missing locally, so try to install it via whatever
+# package manager is on hand before giving up.
+ensure_jq() {
+  if command -v jq >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "jq not found - attempting to install it..." >&2
+  if command -v choco >/dev/null 2>&1; then
+    choco install jq -y
+  elif command -v scoop >/dev/null 2>&1; then
+    scoop install jq
+  elif command -v winget >/dev/null 2>&1; then
+    winget install --id jqlang.jq -e --accept-source-agreements --accept-package-agreements
+  elif command -v brew >/dev/null 2>&1; then
+    brew install jq
+  elif command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update && sudo apt-get install -y jq
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y jq
+  elif command -v yum >/dev/null 2>&1; then
+    sudo yum install -y jq
+  fi
+  hash -r 2>/dev/null || true
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq is required but could not be installed automatically." >&2
+    echo "       Install it yourself (https://jqlang.github.io/jq/download/) and re-run -" >&2
+    echo "       if an installer above reported success, it may just need a new shell to appear on PATH." >&2
+    exit 1
+  fi
+  echo "jq installed successfully." >&2
+}
+
 require_cmd curl
-require_cmd jq
+ensure_jq
 require_cmd kubectl
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -53,6 +116,7 @@ fi
 
 ACCOUNT_UUID="${DT_ACCOUNT_UUID:-}"
 PLATFORM_TOKEN="${DT_PLATFORM_TOKEN:-}"
+ACCOUNT_ENV="${DT_ACCOUNT_ENV:-prod}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,6 +126,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --platform-token)
       PLATFORM_TOKEN="$2"
+      shift 2
+      ;;
+    --account-env)
+      ACCOUNT_ENV="$2"
       shift 2
       ;;
     -h|--help)
@@ -82,13 +150,15 @@ if [[ -z "$ACCOUNT_UUID" || -z "$PLATFORM_TOKEN" ]]; then
   exit 1
 fi
 
-# Service aliases are derived from src/ so the allowlist and the k8s patch
-# step always agree with the repo's actual services (they map 1:1 to the
-# Helm chart's "app" subchart aliases in helm/easytrade/Chart.yaml).
-ALIASES=()
-for dir in "${REPO_ROOT}/src"/*/; do
-  ALIASES+=("$(basename "$dir")")
-done
+case "$ACCOUNT_ENV" in
+  prod) API_BASE="$PROD_API_BASE" ;;
+  sprint) API_BASE="$SPRINT_API_BASE" ;;
+  *)
+    echo "ERROR: --account-env/DT_ACCOUNT_ENV must be 'prod' or 'sprint' (got '${ACCOUNT_ENV}')." >&2
+    exit 1
+    ;;
+esac
+echo "Using ${ACCOUNT_ENV} Account Management API: ${API_BASE}"
 
 # Longest-alias-first so suffix matching below can't be fooled by a shorter
 # alias that happens to be a suffix of a longer one.
