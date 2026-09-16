@@ -1,0 +1,497 @@
+#!/usr/bin/env bash
+#
+# Deploys the EasyTrade bizevent Monaco configuration to a Dynatrace tenant:
+#   - config.bizevent-capturing    OneAgent bizevent HTTP sensors (Java, .NET,
+#                                  Node.js, Go, web server) - required by the
+#                                  capture rules below
+#   - bizevents                    ~60 builtin:bizevents.http.incoming rules
+#   - bizevents-processing-rules   trading-volume metric + CVV masking (legacy
+#                                  schemas; skipped on newer tenants)
+#   - bizevents-openpipeline       same two rules as an OpenPipeline pipeline
+#                                  + routing entry (current tenants)
+#   - bizflow                      credit-card-order and deposit-trade flows
+#
+# Installs the monaco CLI first if it isn't already available.
+#
+# Deliberately does NOT deploy the `config` grouping wholesale: it contains
+# allowed-outbound-connections, a singleton that would overwrite whatever the
+# tenant already has (see monaco/README.md).
+#
+# See: monaco/README.md
+#      https://www.dynatrace.com/support/help/manage/configuration-as-code/monaco/installation
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/.env"
+
+MONACO_REPO="Dynatrace/dynatrace-configuration-as-code"
+# bizevents-processing-rules and bizevents-openpipeline are two versions of the
+# same thing (metric extraction + CVV masking). The old builtin:bizevents-
+# processing-*.rule schemas were replaced by OpenPipeline, so a given tenant
+# supports exactly one of them; the schema pre-flight below drops the other.
+PROJECTS=(
+  config.bizevent-capturing
+  bizevents
+  bizevents-processing-rules
+  bizevents-openpipeline
+  bizflow
+)
+
+MONACO_DIR="${MONACO_DIR:-}"
+ENVIRONMENT="${MONACO_ENVIRONMENT:-dev}"
+TOKEN_ENDPOINT="${MONACO_OAUTH_TOKEN_ENDPOINT:-${OAUTH_TOKEN_ENDPOINT:-}}"
+INSTALL_DIR="${MONACO_INSTALL_DIR:-${SCRIPT_DIR}/.bin}"
+MONACO_VERSION="${MONACO_VERSION:-latest}"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Deploys the EasyTrade bizevent configuration (${PROJECTS[*]}) via monaco.
+
+Options:
+  --monaco-dir DIR        Path to the repo's monaco/ directory
+                          (default: <script-dir>/../monaco)
+  --environment NAME      Manifest environment to deploy to (default: dev)
+  --token-endpoint URL    OAuth token endpoint, for tenants that don't use the
+                          default https://sso.dynatrace.com - e.g. a sprint or
+                          hardening tenant. Also settable via
+                          MONACO_OAUTH_TOKEN_ENDPOINT.
+  --install-dir DIR       Where to install the monaco binary if it isn't already
+                          on PATH (default: <script-dir>/.bin)
+  --dry-run-only          Validate with a dry run and stop; don't deploy.
+  -h, --help              Show this help
+
+Credentials are read from the environment (and from ${ENV_FILE} /
+<monaco-dir>/.env if those exist) - never passed as flags:
+  MONACO_TENANT_URL      Tenant base URL, e.g. https://abc12345.apps.dynatrace.com  (required)
+
+Then at least one platform credential:
+  MONACO_CLIENT_ID       OAuth client ID
+  MONACO_CLIENT_SECRET   OAuth client secret
+  MONACO_PLATFORM_TOKEN  Platform token - use this where classic API token
+                         creation is disabled
+
+  MONACO_TENANT_TOKEN    Classic API token. OPTIONAL: none of the bizevent
+                         projects need it (they are all Settings 2.0 / app
+                         settings). The auth block is generated without it
+                         when unset.
+
+The unprefixed names (TENANT_URL, TENANT_TOKEN, CLIENT_ID, CLIENT_SECRET,
+PLATFORM_TOKEN) are also accepted, since that is what monaco/.env.example uses;
+the MONACO_-prefixed ones win when both are set.
+EOF
+}
+
+DRY_RUN_ONLY=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --monaco-dir)
+      MONACO_DIR="$2"
+      shift 2
+      ;;
+    --environment)
+      ENVIRONMENT="$2"
+      shift 2
+      ;;
+    --token-endpoint)
+      TOKEN_ENDPOINT="$2"
+      shift 2
+      ;;
+    --install-dir)
+      INSTALL_DIR="$2"
+      shift 2
+      ;;
+    --dry-run-only)
+      DRY_RUN_ONLY=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown argument '$1'" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "ERROR: required command '$1' not found in PATH." >&2
+    exit 1
+  fi
+}
+
+require_cmd curl
+
+if [[ -z "$MONACO_DIR" ]]; then
+  MONACO_DIR="${SCRIPT_DIR}/../monaco"
+fi
+
+if [[ ! -f "${MONACO_DIR}/manifest.yaml" ]]; then
+  echo "ERROR: no manifest.yaml under '${MONACO_DIR}'." >&2
+  echo "       Run this from a repo checkout, or point at the monaco directory:" >&2
+  echo "         $(basename "$0") --monaco-dir /path/to/easytrade/monaco" >&2
+  exit 1
+fi
+MONACO_DIR="$(cd "$MONACO_DIR" && pwd)"
+
+# Dotenv semantics: the file supplies defaults, anything already exported in
+# the caller's environment wins. Sourcing with `set -a` would do the opposite,
+# letting an empty placeholder in .env silently clobber a real value.
+load_env_file() {
+  local file="$1" line key val
+  [[ -f "$file" ]] || return 0
+  echo "Loading environment from ${file}"
+  # `|| [[ -n "$line" ]]` so a final line without a trailing newline is read.
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "$line" || "$line" == '#'* ]] && continue
+    line="${line#export }"
+    [[ "$line" != *=* ]] && continue
+    key="${line%%=*}"
+    val="${line#*=}"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ "$val" == \"*\" && ${#val} -ge 2 ]]; then
+      val="${val:1:${#val}-2}"
+    elif [[ "$val" == \'*\' && ${#val} -ge 2 ]]; then
+      val="${val:1:${#val}-2}"
+    fi
+    [[ -n "${!key:-}" ]] && continue
+    export "${key}=${val}"
+  done <"$file"
+}
+
+for f in "$ENV_FILE" "${MONACO_DIR}/.env"; do
+  load_env_file "$f"
+done
+
+# Flags still win over anything the .env files just set.
+TOKEN_ENDPOINT="${TOKEN_ENDPOINT:-${MONACO_OAUTH_TOKEN_ENDPOINT:-${OAUTH_TOKEN_ENDPOINT:-}}}"
+
+# monaco/manifest.yaml is tracked and reads TENANT_URL/TENANT_TOKEN/CLIENT_ID/
+# CLIENT_SECRET straight from the environment, so those exact names have to
+# exist by the time monaco runs. Prefer MONACO_-prefixed names (keeps
+# scripts/.env namespaced against the DT_* vars other scripts use) and export
+# what the manifest expects. Unprefixed still works, for a monaco/.env written
+# to the convention in monaco/README.md.
+resolve_var() {
+  local prefixed="$1" plain="$2"
+  if [[ -n "${!prefixed:-}" ]]; then
+    export "${plain}=${!prefixed}"
+  fi
+  [[ -n "${!plain:-}" ]]
+}
+
+resolve_var MONACO_TENANT_URL TENANT_URL || {
+  echo "ERROR: MONACO_TENANT_URL is not set." >&2
+  echo "       Set it in ${ENV_FILE}, or set TENANT_URL in ${MONACO_DIR}/.env." >&2
+  exit 1
+}
+
+# Every project this script deploys is Settings 2.0 / app settings
+# (builtin:bizevents.*, builtin:oneagent.features, app:dynatrace.biz.flow:*),
+# so a classic API token is not needed - that's only required by the classic
+# config API projects (application, custom-service, management-zone) which we
+# deliberately don't deploy. Environments where classic token creation is
+# disabled can therefore authenticate with OAuth and/or a platform token, and
+# the auth block of the generated manifest is trimmed to match what's set.
+HAVE_CLASSIC_TOKEN=0
+HAVE_OAUTH=0
+HAVE_PLATFORM_TOKEN=0
+
+resolve_var MONACO_TENANT_TOKEN TENANT_TOKEN && HAVE_CLASSIC_TOKEN=1
+resolve_var MONACO_PLATFORM_TOKEN PLATFORM_TOKEN && HAVE_PLATFORM_TOKEN=1
+
+if resolve_var MONACO_CLIENT_ID CLIENT_ID && resolve_var MONACO_CLIENT_SECRET CLIENT_SECRET; then
+  HAVE_OAUTH=1
+fi
+
+if [[ $HAVE_OAUTH -eq 0 && $HAVE_PLATFORM_TOKEN -eq 0 ]]; then
+  echo "ERROR: no platform credentials found. Set either" >&2
+  echo "         MONACO_CLIENT_ID + MONACO_CLIENT_SECRET   (OAuth client), or" >&2
+  echo "         MONACO_PLATFORM_TOKEN                     (platform token)" >&2
+  echo "       in ${ENV_FILE}. A classic API token (MONACO_TENANT_TOKEN) is" >&2
+  echo "       optional here and is not required for the bizevent projects." >&2
+  exit 1
+fi
+
+# monaco rejects a manifest carrying both: "OAuth credentials and a platform
+# token can't be used at the same time". Setting a platform token is the more
+# explicit act, so it wins - but say so, since .env usually has OAuth filled in.
+if [[ $HAVE_PLATFORM_TOKEN -eq 1 && $HAVE_OAUTH -eq 1 ]]; then
+  echo "Both a platform token and OAuth credentials are set; monaco allows only"
+  echo "one, so using the platform token and ignoring the OAuth client."
+  HAVE_OAUTH=0
+fi
+
+# The token endpoint only matters for the OAuth exchange.
+if [[ $HAVE_OAUTH -eq 0 ]]; then
+  TOKEN_ENDPOINT=""
+fi
+
+auth_summary=()
+[[ $HAVE_OAUTH -eq 1 ]] && auth_summary+=("oauth")
+[[ $HAVE_PLATFORM_TOKEN -eq 1 ]] && auth_summary+=("platform-token")
+[[ $HAVE_CLASSIC_TOKEN -eq 1 ]] && auth_summary+=("classic-token")
+echo "Auth: ${auth_summary[*]}"
+
+monaco_asset() {
+  local os arch ext=""
+  case "$(uname -s)" in
+    Linux) os="linux" ;;
+    Darwin) os="darwin" ;;
+    MINGW*|MSYS*|CYGWIN*) os="windows"; ext=".exe" ;;
+    *)
+      echo "ERROR: unsupported OS '$(uname -s)' - install monaco manually." >&2
+      return 1
+      ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64) arch="amd64" ;;
+    arm64|aarch64) arch="arm64" ;;
+    i386|i686) arch="386" ;;
+    *)
+      echo "ERROR: unsupported architecture '$(uname -m)' - install monaco manually." >&2
+      return 1
+      ;;
+  esac
+  if [[ "$os" == "darwin" && "$arch" == "386" ]]; then
+    echo "ERROR: no monaco build for darwin/386." >&2
+    return 1
+  fi
+  echo "monaco-${os}-${arch}${ext}"
+}
+
+install_monaco() {
+  local asset url base tmp
+  asset="$(monaco_asset)" || exit 1
+  if [[ "$MONACO_VERSION" == "latest" ]]; then
+    base="https://github.com/${MONACO_REPO}/releases/latest/download"
+  else
+    base="https://github.com/${MONACO_REPO}/releases/download/${MONACO_VERSION}"
+  fi
+  url="${base}/${asset}"
+
+  mkdir -p "$INSTALL_DIR"
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
+
+  echo "Downloading ${url}"
+  if ! curl -fsSL "$url" -o "${tmp}/${asset}"; then
+    echo "ERROR: failed to download monaco from ${url}" >&2
+    exit 1
+  fi
+
+  # The release publishes a .sha256 next to each binary - check it, since we
+  # are about to execute what we just downloaded.
+  if command -v sha256sum >/dev/null 2>&1 && curl -fsSL "${url}.sha256" -o "${tmp}/${asset}.sha256" 2>/dev/null; then
+    local expected actual
+    expected="$(tr -d '\r' <"${tmp}/${asset}.sha256" | awk '{print $1}')"
+    actual="$(sha256sum "${tmp}/${asset}" | awk '{print $1}')"
+    if [[ -n "$expected" && "$expected" != "$actual" ]]; then
+      echo "ERROR: checksum mismatch for ${asset}" >&2
+      echo "       expected ${expected}" >&2
+      echo "       actual   ${actual}" >&2
+      exit 1
+    fi
+    echo "Checksum verified."
+  else
+    echo "WARNING: could not verify the monaco checksum (no sha256sum or no .sha256 asset)." >&2
+  fi
+
+  local target="${INSTALL_DIR}/monaco"
+  [[ "$asset" == *.exe ]] && target="${target}.exe"
+  mv "${tmp}/${asset}" "$target"
+  chmod +x "$target"
+  MONACO_BIN="$target"
+  echo "Installed monaco to ${target}"
+}
+
+MONACO_BIN=""
+if command -v monaco >/dev/null 2>&1; then
+  MONACO_BIN="monaco"
+  echo "Using monaco already on PATH."
+elif [[ -x "${INSTALL_DIR}/monaco" ]]; then
+  MONACO_BIN="${INSTALL_DIR}/monaco"
+  echo "Using previously installed ${MONACO_BIN}"
+elif [[ -x "${INSTALL_DIR}/monaco.exe" ]]; then
+  MONACO_BIN="${INSTALL_DIR}/monaco.exe"
+  echo "Using previously installed ${MONACO_BIN}"
+else
+  install_monaco
+fi
+
+"$MONACO_BIN" version || true
+
+# The tracked manifest always declares a classic `token:` and no tokenEndpoint.
+# Write a patched copy next to the original whenever that doesn't match the
+# credentials we actually have - dropping auth blocks with no credentials
+# behind them, adding platformToken, and pinning a non-default SSO endpoint.
+# Project paths resolve relative to the manifest, so the copy lives in monaco/.
+MANIFEST="${MONACO_DIR}/manifest.yaml"
+if [[ $HAVE_CLASSIC_TOKEN -eq 0 || $HAVE_OAUTH -eq 0 || $HAVE_PLATFORM_TOKEN -eq 1 || -n "$TOKEN_ENDPOINT" ]]; then
+  GENERATED_MANIFEST="${MONACO_DIR}/.manifest-bizevents-generated.yaml"
+  trap 'rm -f "$GENERATED_MANIFEST"' EXIT
+
+  awk \
+    -v ep="$TOKEN_ENDPOINT" \
+    -v drop_token="$((1 - HAVE_CLASSIC_TOKEN))" \
+    -v drop_oauth="$((1 - HAVE_OAUTH))" \
+    -v add_platform="$HAVE_PLATFORM_TOKEN" '
+    {
+      line = $0
+      match(line, /^[[:space:]]*/)
+      ind = RLENGTH
+
+      # Inside a block we are removing: swallow everything indented deeper.
+      if (skipping) {
+        if (line ~ /^[[:space:]]*$/) next
+        if (ind > skip_indent) next
+        skipping = 0
+      }
+
+      if (drop_token == "1" && line ~ /^[[:space:]]*token:[[:space:]]*$/) {
+        skipping = 1; skip_indent = ind; next
+      }
+      if (drop_oauth == "1" && line ~ /^[[:space:]]*oAuth:[[:space:]]*$/) {
+        skipping = 1; skip_indent = ind; next
+      }
+
+      print line
+
+      if (add_platform == "1" && line ~ /^[[:space:]]*auth:[[:space:]]*$/) {
+        printf "%*splatformToken:\n", ind + 2, ""
+        printf "%*stype: environment\n", ind + 4, ""
+        printf "%*sname: PLATFORM_TOKEN\n", ind + 4, ""
+        seen_auth = 1
+      }
+      if (ep != "" && line ~ /^[[:space:]]*oAuth:[[:space:]]*$/) {
+        printf "%*stokenEndpoint:\n", ind + 2, ""
+        printf "%*stype: value\n", ind + 4, ""
+        printf "%*svalue: %s\n", ind + 4, "", ep
+        seen_oauth = 1
+      }
+    }
+    END {
+      if (add_platform == "1" && !seen_auth) {
+        print "ERROR: no auth: block found" > "/dev/stderr"; exit 1
+      }
+      if (ep != "" && !seen_oauth) {
+        print "ERROR: no oAuth: block found for tokenEndpoint" > "/dev/stderr"; exit 1
+      }
+    }
+  ' "$MANIFEST" >"$GENERATED_MANIFEST" || {
+    echo "ERROR: could not generate a manifest from ${MANIFEST}." >&2
+    exit 1
+  }
+
+  MANIFEST="$GENERATED_MANIFEST"
+  if [[ $HAVE_CLASSIC_TOKEN -eq 0 ]]; then
+    echo "No classic API token set - generated an auth block without it."
+  fi
+  if [[ -n "$TOKEN_ENDPOINT" ]]; then
+    echo "Using OAuth token endpoint: ${TOKEN_ENDPOINT}"
+  fi
+fi
+
+# Not every tenant carries every schema these projects target: the
+# bizevents-processing-*.rule schemas were superseded by OpenPipeline on newer
+# versions, and app:dynatrace.biz.flow:* only exists once the Business Flow app
+# is installed from the Hub. Monaco surfaces those as a hard 404 mid-deploy,
+# after it has already written the other configs. Ask the tenant up front
+# instead and drop the projects it can't accept.
+schemas_for_project() {
+  case "$1" in
+    config.bizevent-capturing) echo "builtin:oneagent.features" ;;
+    bizevents) echo "builtin:bizevents.http.incoming" ;;
+    bizevents-processing-rules)
+      echo "builtin:bizevents-processing-metrics.rule builtin:bizevents-processing-pipelines.rule" ;;
+    bizevents-openpipeline)
+      echo "builtin:openpipeline.bizevents.pipelines builtin:openpipeline.bizevents.routing" ;;
+    bizflow) echo "app:dynatrace.biz.flow:biz-flow-settings" ;;
+    *) echo "" ;;
+  esac
+}
+
+tenant_bearer() {
+  if [[ $HAVE_PLATFORM_TOKEN -eq 1 ]]; then
+    printf '%s' "$PLATFORM_TOKEN"
+    return 0
+  fi
+  local endpoint="${TOKEN_ENDPOINT:-https://sso.dynatrace.com/sso/oauth2/token}"
+  curl -sS -X POST "$endpoint"     -H 'Content-Type: application/x-www-form-urlencoded'     --data-urlencode 'grant_type=client_credentials'     --data-urlencode "client_id=${CLIENT_ID}"     --data-urlencode "client_secret=${CLIENT_SECRET}"     --data-urlencode 'scope=settings:schemas:read'     | grep -o '"access_token"[[:space:]]*:[[:space:]]*"[^"]*"'     | head -1     | sed 's/.*:[[:space:]]*"//; s/"$//'
+}
+
+filter_projects_by_schema() {
+  local bearer available missing kept=() dropped=() p s ok
+  bearer="$(tenant_bearer 2>/dev/null || true)"
+  if [[ -z "$bearer" ]]; then
+    echo "WARNING: could not get a token for the schema pre-flight; deploying all projects." >&2
+    return 0
+  fi
+  available="$(curl -sS -H "Authorization: Bearer ${bearer}"     "${TENANT_URL%/}/platform/classic/environment-api/v2/settings/schemas"     | grep -o '"schemaId"[[:space:]]*:[[:space:]]*"[^"]*"'     | sed 's/.*:[[:space:]]*"//; s/"$//' || true)"
+  if [[ -z "$available" ]]; then
+    echo "WARNING: could not list tenant schemas; deploying all projects." >&2
+    return 0
+  fi
+
+  for p in "${PROJECTS[@]}"; do
+    ok=1
+    missing=""
+    for s in $(schemas_for_project "$p"); do
+      if ! grep -qxF "$s" <<<"$available"; then
+        ok=0
+        missing="${missing} ${s}"
+      fi
+    done
+    if [[ $ok -eq 1 ]]; then
+      kept+=("$p")
+    else
+      dropped+=("$p")
+      echo "  skipping ${p}: tenant has no schema for${missing}"
+    fi
+  done
+
+  if [[ ${#dropped[@]} -gt 0 ]]; then
+    SKIPPED_PROJECTS=("${dropped[@]}")
+  fi
+  if [[ ${#kept[@]} -eq 0 ]]; then
+    echo "ERROR: none of the projects are supported by this tenant." >&2
+    exit 1
+  fi
+  PROJECTS=("${kept[@]}")
+}
+
+SKIPPED_PROJECTS=()
+echo "Checking which schemas this tenant supports..."
+filter_projects_by_schema
+
+deploy_args=("$MANIFEST" -e "$ENVIRONMENT")
+for p in "${PROJECTS[@]}"; do
+  deploy_args+=(-p "$p")
+done
+
+echo "Validating (dry run): ${PROJECTS[*]} -> ${ENVIRONMENT}"
+if ! "$MONACO_BIN" deploy "${deploy_args[@]}" --dry-run; then
+  echo "Aborting: dry run failed, nothing was deployed." >&2
+  exit 1
+fi
+
+if [[ $DRY_RUN_ONLY -eq 1 ]]; then
+  echo "Dry run succeeded. Stopping here (--dry-run-only)."
+  exit 0
+fi
+
+echo "Deploying: ${PROJECTS[*]} -> ${ENVIRONMENT}"
+"$MONACO_BIN" deploy "${deploy_args[@]}"
+
+echo "Done. Deployed: ${PROJECTS[*]}"
+if [[ ${#SKIPPED_PROJECTS[@]} -gt 0 ]]; then
+  echo "Skipped (schema not available on this tenant): ${SKIPPED_PROJECTS[*]}"
+fi

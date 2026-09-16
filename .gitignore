@@ -9,3 +9,7 @@
 .agents/skills/dt-*/
 .claude/skills/dt-*/
 skills-lock.json
+
+# Tooling downloaded by scripts/ (monaco CLI) and monaco's run logs
+scripts/.bin/
+.logs/
