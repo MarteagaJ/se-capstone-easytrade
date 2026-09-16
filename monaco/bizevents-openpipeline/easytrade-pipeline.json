@@ -1,0 +1,37 @@
+{
+  "customId": "easytrade-bizevents",
+  "displayName": "EasyTrade bizevents",
+  "metadataList": [],
+  "routing": "routable",
+  "processing": {
+    "processors": [
+      {
+        "id": "easytrade-mask-cvv",
+        "type": "dql",
+        "enabled": true,
+        "description": "EasyTrade: Mask CVV",
+        "matcher": "isNotNull(cvv)",
+        "dql": {
+          "script": "fieldsAdd cvv = hashSha1(cvv)"
+        },
+        "sampleData": "{\n\t\"cvv\": \"123\",\n\t\"unmasked\": \"unchanged\"\n}"
+      }
+    ]
+  },
+  "metricExtraction": {
+    "processors": [
+      {
+        "id": "easytrade-trading-volume",
+        "type": "valueMetric",
+        "enabled": true,
+        "description": "EasyTrade: trading volume",
+        "matcher": "matchesValue(event.type, \"com.easytrade.long-buy\") or matchesValue(event.type, \"com.easytrade.quick-buy\")",
+        "valueMetric": {
+          "metricKey": "bizevents.easyTrade.TradingVolume",
+          "field": "amount",
+          "dimensions": []
+        }
+      }
+    ]
+  }
+}

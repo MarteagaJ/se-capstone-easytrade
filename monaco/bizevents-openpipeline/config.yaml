@@ -1,0 +1,39 @@
+# OpenPipeline replacement for the bizevents-processing-rules project.
+#
+# builtin:bizevents-processing-metrics.rule and
+# builtin:bizevents-processing-pipelines.rule no longer exist on current
+# Dynatrace versions - that functionality moved to OpenPipeline. Tenants still
+# carrying the old schemas should keep using bizevents-processing-rules; only
+# one of the two projects will be deployable on a given tenant.
+#
+# WARNING: builtin:openpipeline.bizevents.routing is a SINGLETON. Deploying
+# this project replaces the whole bizevents routing table, the same way
+# config/allowed-outbound-connections replaces outbound connections (see
+# ../README.md). If you add routing entries by hand in the UI, back them up
+# before redeploying or they will be lost.
+configs:
+  - id: easytrade_bizevents_pipeline
+    config:
+      name: EasyTrade bizevents
+      template: easytrade-pipeline.json
+      skip: false
+    type:
+      settings:
+        schema: builtin:openpipeline.bizevents.pipelines
+        scope: environment
+
+  - id: easytrade_bizevents_routing
+    config:
+      name: EasyTrade bizevents routing
+      template: easytrade-routing.json
+      skip: false
+      parameters:
+        pipelineId:
+          type: reference
+          configType: builtin:openpipeline.bizevents.pipelines
+          configId: easytrade_bizevents_pipeline
+          property: id
+    type:
+      settings:
+        schema: builtin:openpipeline.bizevents.routing
+        scope: environment

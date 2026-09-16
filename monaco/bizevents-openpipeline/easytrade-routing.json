@@ -1,0 +1,11 @@
+{
+  "routingEntries": [
+    {
+      "enabled": true,
+      "pipelineType": "custom",
+      "pipelineId": "{{ .pipelineId }}",
+      "matcher": "matchesValue(event.provider, \"www.easytrade.com\")",
+      "description": "EasyTrade bizevents"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ projects:
   - name: application
   - name: bizevents
   - name: bizevents-processing-rules
+  - name: bizevents-openpipeline
   - name: bizflow
   - name: custom-service
   - name: management-zone
