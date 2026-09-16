@@ -1,0 +1,228 @@
+{
+  "id": "a53ec0ae-55b0-4182-b667-40ad25785e8c",
+  "name": "EasyTrade - Customer Base \u0026 Engagement",
+  "type": "dashboard",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 2,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-16T17:38:06.77Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-16T17:39:50.615Z"
+  },
+  "content": {
+    "layouts": {
+      "1": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "10": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "2": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 2
+      },
+      "3": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 2
+      },
+      "4": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 2
+      },
+      "5": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 2
+      },
+      "6": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "7": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "8": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "9": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      }
+    },
+    "tiles": {
+      "1": {
+        "content": "# 👥 EasyTrade — Customer Base \u0026 Engagement\nCustomer segmentation, login activity, and partner offer engagement.",
+        "type": "markdown"
+      },
+      "10": {
+        "query": "fetch bizevents\n| filter event.type == \"com.easytrade.offer\"\n| fieldsAdd partner = arrayElement(splitString(event.category, \"/\"), 3)\n| summarize views = count(), by:{partner}\n| sort views desc",
+        "querySettings": {},
+        "title": "Partner Offer Engagement",
+        "type": "data",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {
+          "categoryAxis": {
+            "label": {
+              "label": "Partner",
+              "showLabel": true
+            }
+          },
+          "colorModeType": {
+            "colorCategoryMode": "multi-color",
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "displayedFields": [
+              "partner"
+            ],
+            "values": [
+              "views"
+            ]
+          },
+          "numericAxis": {
+            "label": {
+              "label": "Offer Views",
+              "showLabel": true
+            }
+          }
+        }
+      },
+      "2": {
+        "query": "fetch bizevents\n| filter event.type == \"com.easytrade.account\"\n| summarize total_accounts = countDistinct(accountId)",
+        "querySettings": {},
+        "title": "Total Accounts",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "total_accounts"
+            },
+            "icon": "PersonIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "3": {
+        "query": "fetch bizevents\n| filter event.type == \"com.easytrade.login\"\n| summarize total_logins = count()",
+        "querySettings": {},
+        "title": "Total Logins",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "total_logins"
+            },
+            "icon": "LoginIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "4": {
+        "query": "fetch bizevents\n| filter event.type == \"com.easytrade.offer\"\n| summarize total_offers = count()",
+        "querySettings": {},
+        "title": "Partner Offers Presented",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "total_offers"
+            },
+            "icon": "GiftIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "5": {
+        "query": "fetch bizevents\n| filter event.type == \"com.easytrade.offer\"\n| summarize distinct_partners = countDistinct(event.category)",
+        "querySettings": {},
+        "title": "Distinct Partner Offers",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "distinct_partners"
+            },
+            "icon": "HandshakeIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "6": {
+        "content": "## Customer Segmentation",
+        "type": "markdown"
+      },
+      "7": {
+        "query": "fetch bizevents\n| filter event.type == \"com.easytrade.account\"\n| summarize takeLast(packageId), by:{accountId}\n| fieldsRename tier = `takeLast(packageId)`\n| summarize accounts = count(), by:{tier}\n| sort tier asc",
+        "querySettings": {},
+        "title": "Customers by Package Tier",
+        "type": "data",
+        "visualization": "donutChart",
+        "visualizationSettings": {
+          "dataMapping": {
+            "displayedFields": [
+              "tier"
+            ],
+            "value": "accounts"
+          },
+          "labels": {
+            "showLabels": true
+          }
+        }
+      },
+      "8": {
+        "query": "fetch bizevents\n| filter event.type == \"com.easytrade.login\"\n| makeTimeseries logins = count(), interval: 1h",
+        "querySettings": {},
+        "title": "Login Activity Over Time",
+        "type": "data",
+        "visualization": "lineChart",
+        "visualizationSettings": {
+          "colorModeType": {
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "interval": "interval",
+            "time": "timeframe",
+            "values": [
+              "logins"
+            ]
+          }
+        }
+      },
+      "9": {
+        "content": "## Partner \u0026 Product Engagement",
+        "type": "markdown"
+      }
+    },
+    "variables": [],
+    "version": 21
+  }
+}

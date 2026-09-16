@@ -1,0 +1,289 @@
+{
+  "id": "3c3319ba-f540-4748-a4c1-65ae07768294",
+  "name": "EasyTrade - Customer Conversion \u0026 Reach",
+  "type": "dashboard",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 2,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-16T17:38:04.845Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-16T17:39:48.138Z"
+  },
+  "content": {
+    "layouts": {
+      "1": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "10": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "11": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 16
+      },
+      "12": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 16
+      },
+      "2": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 2
+      },
+      "3": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 2
+      },
+      "4": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 2
+      },
+      "5": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 2
+      },
+      "6": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "7": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "8": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "9": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      }
+    },
+    "tiles": {
+      "1": {
+        "content": "# 🌍 EasyTrade — Customer Conversion \u0026 Reach\nFrontend conversion funnel, error rates, and global reach based on real user session telemetry (RUM).",
+        "type": "markdown"
+      },
+      "10": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| summarize activity = count(), by:{geo.country.name}\n| sort activity desc\n| limit 10",
+        "querySettings": {},
+        "title": "Activity by Country",
+        "type": "data",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {
+          "categoryAxis": {
+            "label": {
+              "label": "Country",
+              "showLabel": true
+            }
+          },
+          "colorModeType": {
+            "colorCategoryMode": "multi-color",
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "displayedFields": [
+              "geo.country.name"
+            ],
+            "values": [
+              "activity"
+            ]
+          },
+          "layout": {
+            "groupMode": "stacked",
+            "position": "horizontal"
+          },
+          "numericAxis": {
+            "label": {
+              "label": "Sessions",
+              "showLabel": true
+            }
+          }
+        }
+      },
+      "11": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| summarize sessions = count(), by:{browser.name}\n| sort sessions desc",
+        "querySettings": {},
+        "title": "Browser Mix",
+        "type": "data",
+        "visualization": "donutChart",
+        "visualizationSettings": {
+          "dataMapping": {
+            "displayedFields": [
+              "browser.name"
+            ],
+            "value": "sessions"
+          },
+          "labels": {
+            "showLabels": true
+          }
+        }
+      },
+      "12": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| summarize sessions = count(), by:{os.name}\n| sort sessions desc",
+        "querySettings": {},
+        "title": "Operating System Mix",
+        "type": "data",
+        "visualization": "donutChart",
+        "visualizationSettings": {
+          "dataMapping": {
+            "displayedFields": [
+              "os.name"
+            ],
+            "value": "sessions"
+          },
+          "labels": {
+            "showLabels": true
+          }
+        }
+      },
+      "2": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| summarize unique_sessions = countDistinct(dt.rum.session.id)",
+        "querySettings": {},
+        "title": "Unique Active Sessions",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "unique_sessions"
+            },
+            "icon": "UserIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "3": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| fieldsAdd phase = arrayElement(splitString(event.type, \".\"), 3)\n| summarize started = countIf(phase == \"start\"), finished = countIf(phase == \"finish\")\n| fieldsAdd conversion_pct = round(finished * 100.0 / started, decimals:1)",
+        "querySettings": {},
+        "title": "Overall Conversion Rate (%)",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "conversion_pct"
+            },
+            "icon": "CheckmarkCircleIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "4": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| fieldsAdd phase = arrayElement(splitString(event.type, \".\"), 3)\n| summarize started = countIf(phase == \"start\"), errored = countIf(phase == \"error\")\n| fieldsAdd error_pct = round(errored * 100.0 / started, decimals:2)",
+        "querySettings": {},
+        "title": "Overall Error Rate (%)",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "error_pct"
+            },
+            "icon": "ErrorIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "5": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| summarize countries = countDistinct(geo.country.name)",
+        "querySettings": {},
+        "title": "Countries Reached",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "countries"
+            },
+            "icon": "GlobeIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "6": {
+        "content": "## Conversion Funnel",
+        "type": "markdown"
+      },
+      "7": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| fieldsAdd action = arrayElement(splitString(event.type, \".\"), 2), phase = arrayElement(splitString(event.type, \".\"), 3)\n| summarize started = countIf(phase == \"start\"), finished = countIf(phase == \"finish\"), by:{action}\n| fieldsAdd conversion_pct = round(finished * 100.0 / started, decimals:1)\n| fields action, conversion_pct\n| sort conversion_pct desc",
+        "querySettings": {},
+        "title": "Conversion Rate by Action (%)",
+        "type": "data",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {
+          "categoryAxis": {
+            "label": {
+              "label": "Action",
+              "showLabel": true
+            }
+          },
+          "colorModeType": {
+            "colorCategoryMode": "multi-color",
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "displayedFields": [
+              "action"
+            ],
+            "values": [
+              "conversion_pct"
+            ]
+          },
+          "numericAxis": {
+            "label": {
+              "label": "Conversion Rate (%)",
+              "showLabel": true
+            }
+          }
+        }
+      },
+      "8": {
+        "query": "fetch bizevents\n| filter event.provider == \"easytrade-frontendreverseproxy\"\n| fieldsAdd action = arrayElement(splitString(event.type, \".\"), 2), phase = arrayElement(splitString(event.type, \".\"), 3)\n| summarize started = countIf(phase == \"start\"), finished = countIf(phase == \"finish\"), errored = countIf(phase == \"error\"), by:{action}\n| fieldsAdd conversion_pct = round(finished * 100.0 / started, decimals:1)\n| sort started desc",
+        "querySettings": {},
+        "title": "Funnel Detail by Action",
+        "type": "data",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "columnWidthStrategy": "content",
+            "rowDensity": "condensed"
+          }
+        }
+      },
+      "9": {
+        "content": "## Geographic \u0026 Platform Reach",
+        "type": "markdown"
+      }
+    },
+    "variables": [],
+    "version": 21
+  }
+}

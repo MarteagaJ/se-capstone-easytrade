@@ -1,0 +1,288 @@
+{
+  "id": "dfef7352-fa2d-44b6-9e63-bd94ed958375",
+  "name": "EasyTrade - Trading \u0026 Revenue Performance",
+  "type": "dashboard",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 2,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-16T17:36:55.971Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-16T17:39:45.719Z"
+  },
+  "content": {
+    "layouts": {
+      "1": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "10": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "11": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "12": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
+      "13": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
+      "2": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 2
+      },
+      "3": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 2
+      },
+      "4": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 2
+      },
+      "5": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 2
+      },
+      "6": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "7": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 7
+      },
+      "8": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "9": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      }
+    },
+    "tiles": {
+      "1": {
+        "content": "# 📈 EasyTrade — Trading \u0026 Revenue Performance\nReal-time trading activity, capital flow, and revenue performance across the platform.",
+        "type": "markdown"
+      },
+      "10": {
+        "query": "fetch bizevents\n| filter in(event.type, {\"com.easytrade.deposit\",\"com.easytrade.withdraw\"})\n| makeTimeseries total = sum(amount), interval: 1h, by:{event.type}",
+        "querySettings": {},
+        "title": "Deposits vs Withdrawals Over Time ($)",
+        "type": "data",
+        "visualization": "areaChart",
+        "visualizationSettings": {
+          "colorModeType": {
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "interval": "interval",
+            "names": [
+              "event.type"
+            ],
+            "time": "timeframe",
+            "values": [
+              "total"
+            ]
+          }
+        }
+      },
+      "11": {
+        "content": "## Instruments \u0026 Top Customers",
+        "type": "markdown"
+      },
+      "12": {
+        "query": "fetch bizevents\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| fieldsAdd notional = amount * price\n| summarize trades = count(), volume = round(sum(notional)), by:{instrumentId}\n| sort volume desc\n| limit 10",
+        "querySettings": {},
+        "title": "Top Traded Instruments by Volume ($)",
+        "type": "data",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {
+          "categoryAxis": {
+            "label": {
+              "label": "Instrument ID",
+              "showLabel": true
+            }
+          },
+          "colorModeType": {
+            "colorCategoryMode": "multi-color",
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "displayedFields": [
+              "instrumentId"
+            ],
+            "values": [
+              "volume"
+            ]
+          },
+          "numericAxis": {
+            "label": {
+              "label": "Volume ($)",
+              "showLabel": true
+            }
+          }
+        }
+      },
+      "13": {
+        "query": "fetch bizevents\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| fieldsAdd notional = amount * price\n| summarize trades = count(), volume = round(sum(notional)), by:{accountId}\n| sort volume desc\n| limit 10",
+        "querySettings": {},
+        "title": "Top Accounts by Trade Volume ($)",
+        "type": "data",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "columnWidthStrategy": "content",
+            "rowDensity": "condensed"
+          }
+        }
+      },
+      "2": {
+        "query": "fetch bizevents\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| summarize total_trades = count()",
+        "querySettings": {},
+        "title": "Total Trades",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "total_trades"
+            },
+            "icon": "AnalyticsIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "3": {
+        "query": "fetch bizevents\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| fieldsAdd notional = amount * price\n| summarize total_volume = round(sum(notional))",
+        "querySettings": {},
+        "title": "Total Trade Volume ($)",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "total_volume"
+            },
+            "icon": "MoneybagIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "4": {
+        "query": "fetch bizevents\n| filter in(event.type, {\"com.easytrade.deposit\",\"com.easytrade.withdraw\"})\n| fieldsAdd signed = if(event.type == \"com.easytrade.deposit\", amount, else: -amount)\n| summarize net_flow = round(sum(signed))",
+        "querySettings": {},
+        "title": "Net Capital Flow ($)",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "net_flow"
+            },
+            "icon": "BankIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "5": {
+        "query": "fetch bizevents\n| filter event.type == \"com.easytrade.trade-closed\"\n| summarize win_rate = round((countIf(happened == true) * 100.0) / count(), decimals:1)",
+        "querySettings": {},
+        "title": "Long-Trade Win Rate (%)",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "win_rate"
+            },
+            "icon": "TargetIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "6": {
+        "content": "## Trading Activity",
+        "type": "markdown"
+      },
+      "7": {
+        "query": "fetch bizevents\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| makeTimeseries trades = count(), interval: 1h, by:{event.type}",
+        "querySettings": {},
+        "title": "Trading Activity Over Time",
+        "type": "data",
+        "visualization": "areaChart",
+        "visualizationSettings": {
+          "colorModeType": {
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "interval": "interval",
+            "names": [
+              "event.type"
+            ],
+            "time": "timeframe",
+            "values": [
+              "trades"
+            ]
+          }
+        }
+      },
+      "8": {
+        "query": "fetch bizevents\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| summarize trade_count = count(), by:{event.type}",
+        "querySettings": {},
+        "title": "Trade Type Mix",
+        "type": "data",
+        "visualization": "donutChart",
+        "visualizationSettings": {
+          "dataMapping": {
+            "displayedFields": [
+              "event.type"
+            ],
+            "value": "trade_count"
+          },
+          "labels": {
+            "showLabels": true
+          }
+        }
+      },
+      "9": {
+        "content": "## Capital Flow",
+        "type": "markdown"
+      }
+    },
+    "variables": [],
+    "version": 21
+  }
+}
