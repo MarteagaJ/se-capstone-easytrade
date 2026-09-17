@@ -1,0 +1,147 @@
+{
+  "id": "9bf79bf3-8a1f-4a28-b361-06d9a590090e",
+  "name": "EasyTrade - Service Performance Deep Dive",
+  "type": "notebook",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 1,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-17T22:14:35.07Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-17T22:14:35.07Z"
+  },
+  "content": {
+    "defaultTimeframe": {
+      "from": "now()-2h",
+      "to": "now()"
+    },
+    "sections": [
+      {
+        "id": "1",
+        "markdown": "# ⚙️ EasyTrade — Service Performance Deep Dive\n*Investigating tail latency, load-vs-latency correlation, and database performance across the EasyTrade microservices — sourced from distributed traces.*\n\nThis notebook goes beyond the live RED dashboard to answer: **which services have a dangerous tail, does traffic volume correlate with slowness, and where does database time fit in?**",
+        "type": "markdown"
+      },
+      {
+        "id": "2",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch spans, from:-2h\n| filter request.is_root_span == true\n| summarize requests = count(), failed = countIf(request.is_failed == true), p50 = percentile(duration, 50), p95 = percentile(duration, 95), p99 = percentile(duration, 99), by:{dt.service.name}\n| fieldsAdd error_rate_pct = round(failed * 100.0 / requests, decimals:2)\n| filter requests \u003e 50\n| sort requests desc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "table",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "RED Overview by Service",
+        "type": "dql"
+      },
+      {
+        "id": "3",
+        "markdown": "## Tail Latency — Where the Risk Hides\nAverages and even p95 can hide serious outliers. The **p99-to-p50 ratio** below tells a different story than the overview table: `easytrade-engine-* (/api)` shows a **93x** ratio and `BrokerService` a **72x** ratio — meaning their worst 1% of requests take dozens of times longer than the typical request. That's the profile of an occasional severe stall (e.g. a lock, GC pause, or slow downstream call), not steady degradation. Everything else on the list sits under 21x, which is a normal, healthy spread.",
+        "type": "markdown"
+      },
+      {
+        "id": "4",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch spans, from:-2h\n| filter request.is_root_span == true\n| summarize requests = count(), p50 = percentile(duration, 50), p99 = percentile(duration, 99), by:{dt.service.name}\n| filter requests \u003e 50\n| fieldsAdd tail_ratio = round(p99 / p50, decimals:1)\n| fields dt.service.name, tail_ratio\n| sort tail_ratio desc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "categoricalBarChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Tail Latency Ratio (p99 ÷ p50) by Service",
+        "type": "dql"
+      },
+      {
+        "id": "5",
+        "markdown": "## Load vs. Latency — Does Traffic Correlate with Slowness?\nPlotting request volume against p95 latency answers a common capacity question: are our busiest services also our slowest, or does latency depend on something other than raw traffic? Points in the upper-right would be the real concern (high traffic *and* high latency).",
+        "type": "markdown"
+      },
+      {
+        "id": "6",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch spans, from:-2h\n| filter request.is_root_span == true\n| summarize requests = count(), p95 = percentile(duration, 95), by:{dt.service.name}\n| filter requests \u003e 50"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "scatterplot",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {},
+            "dataMapping": {
+              "displayedFields": [
+                "dt.service.name"
+              ],
+              "xAxis": "requests",
+              "yAxis": "p95"
+            }
+          }
+        },
+        "title": "Request Volume vs. P95 Latency",
+        "type": "dql"
+      },
+      {
+        "id": "7",
+        "markdown": "## Database Performance\nDatabase call performance by service. `OrderController`'s MSSQL calls have the highest p95 (~14.8s avg call chain) of any database-backed service — worth a closer look if `OrderController`'s overall latency (see the overview table above) trends upward.",
+        "type": "markdown"
+      },
+      {
+        "id": "8",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch spans, from:-2h\n| filter isNotNull(db.system)\n| summarize count = count(), avg_duration = avg(duration), p95 = percentile(duration, 95), by:{db.system, dt.service.name}\n| sort p95 desc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "table",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Database Span Performance by Service",
+        "type": "dql"
+      },
+      {
+        "id": "9",
+        "markdown": "## Takeaways\n- **Investigate `easytrade-engine-* (/api)` and `BrokerService` tail outliers** — their p99/p50 ratios (93x, 72x) suggest an intermittent stall rather than general slowness; check for GC pauses, lock contention, or a specific slow downstream dependency.\n- **No error-rate concerns currently** — every service sampled is at 0% failure in this window.\n- **Traffic volume alone does not appear to predict latency** — check the scatterplot for any outliers that buck that trend as load grows.\n- **`OrderController`'s MSSQL calls are the slowest database dependency** in the fleet; if `OrderController` latency degrades, start there.",
+        "type": "markdown"
+      }
+    ],
+    "version": "7"
+  }
+}

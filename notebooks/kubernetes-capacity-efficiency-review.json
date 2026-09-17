@@ -1,0 +1,173 @@
+{
+  "id": "478a2ee6-11d0-40ec-9e54-1974920714dd",
+  "name": "EasyTrade - Kubernetes Capacity \u0026 Efficiency Review",
+  "type": "notebook",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 1,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-17T22:14:36.807Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-17T22:14:36.807Z"
+  },
+  "content": {
+    "defaultTimeframe": {
+      "from": "now()-2h",
+      "to": "now()"
+    },
+    "sections": [
+      {
+        "id": "1",
+        "markdown": "# 🖥️ EasyTrade — Kubernetes Capacity \u0026 Efficiency Review\n*How well are the `local-wsl-capstone` cluster's resource requests match actual usage, and is there any capacity or stability risk worth flagging?*\n\nSourced from Kubernetes container metrics and Smartscape pod configuration.",
+        "type": "markdown"
+      },
+      {
+        "id": "2",
+        "markdown": "## CPU Efficiency by Workload\nEfficiency = actual CPU usage ÷ requested CPU. Low numbers mean a workload is requesting far more CPU than it uses — cluster capacity reserved but sitting idle. **`easytrade-db` is the standout: only 4.2% CPU efficiency**, requesting 500m but using ~21m. Several other workloads (calculationservice, frontend, pricing-service) sit under 20% — CPU requests across the fleet look sized for a much heavier peak load than this environment sees today.",
+        "type": "markdown"
+      },
+      {
+        "id": "3",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "timeseries {usage = avg(dt.kubernetes.container.cpu_usage, scalar:true), requests = avg(dt.kubernetes.container.requests_cpu, scalar:true)}, by:{k8s.workload.name, k8s.namespace.name}\n| filter k8s.namespace.name == \"easytrade\" and requests \u003e 0\n| fieldsAdd efficiency_pct = round(usage * 100.0 / requests, decimals:1)\n| fields k8s.workload.name, efficiency_pct\n| sort efficiency_pct asc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "categoricalBarChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "CPU Efficiency by Workload (Usage ÷ Requests)",
+        "type": "dql"
+      },
+      {
+        "id": "4",
+        "markdown": "## Memory Efficiency by Workload\nMemory tells a much healthier story than CPU — most workloads sit between 29% and 80% of their requested memory, a normal range with reasonable headroom rather than gross over-provisioning. This asymmetry (tight memory sizing, loose CPU sizing) suggests teams sized requests for memory safety margins first and left CPU requests at a generic default.",
+        "type": "markdown"
+      },
+      {
+        "id": "5",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "timeseries {usage = avg(dt.kubernetes.container.memory_working_set, scalar:true), requests = avg(dt.kubernetes.container.requests_memory, scalar:true)}, by:{k8s.workload.name, k8s.namespace.name}\n| filter k8s.namespace.name == \"easytrade\" and requests \u003e 0\n| fieldsAdd efficiency_pct = round(usage * 100.0 / requests, decimals:1)\n| fields k8s.workload.name, efficiency_pct\n| sort efficiency_pct asc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "categoricalBarChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Memory Efficiency by Workload (Usage ÷ Requests)",
+        "type": "dql"
+      },
+      {
+        "id": "6",
+        "markdown": "## Configuration Hygiene — Resource Limits\nA quick governance check: does every container in the `easytrade` namespace have both a CPU and memory limit configured? **Yes — the query below returns zero rows**, confirming full coverage. That's a genuinely good sign; missing limits is one of the most common causes of noisy-neighbor CPU starvation and unbounded memory growth in a shared cluster.",
+        "type": "markdown"
+      },
+      {
+        "id": "7",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "smartscapeNodes \"K8S_POD\"\n| filter k8s.namespace.name == \"easytrade\"\n| parse k8s.object, \"JSON:config\"\n| expand container = config[spec][containers]\n| fieldsAdd container_name = container[name], cpu_limit = container[resources][limits][cpu], mem_limit = container[resources][limits][memory]\n| filter isNull(cpu_limit) or isNull(mem_limit)\n| summarize count(), by:{container_name}"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "table",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Containers Missing a CPU or Memory Limit",
+        "type": "dql"
+      },
+      {
+        "id": "8",
+        "markdown": "## Node Capacity Headroom\nCurrent scheduled pods vs. the node's allocatable pod capacity — the single-node `local-wsl-capstone` cluster's real ceiling for adding more workloads.",
+        "type": "markdown"
+      },
+      {
+        "id": "9",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "timeseries {current_pods = avg(dt.kubernetes.pods), max_pods = avg(dt.kubernetes.node.pods_allocatable)}, by:{k8s.node.name}"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "lineChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Pod Count vs. Node Allocatable Capacity",
+        "type": "dql"
+      },
+      {
+        "id": "10",
+        "markdown": "## Container Restarts \u0026 OOM History\nRestart and out-of-memory-kill trend — widen the time range to 7 or 30 days to see the historical incidents (this environment saw 27 restarts and 19 OOM kills over the trailing month, none in the last 2 hours).",
+        "type": "markdown"
+      },
+      {
+        "id": "11",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "timeseries {restarts = sum(dt.kubernetes.container.restarts), oom_kills = sum(dt.kubernetes.container.oom_kills)}"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "areaChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Container Restarts \u0026 OOM Kills Over Time",
+        "type": "dql"
+      },
+      {
+        "id": "12",
+        "markdown": "## Takeaways\n- **Right-size CPU requests**, especially `easytrade-db`, `easytrade-calculationservice`, and `easytrade-frontend` — all under 20% CPU efficiency. Lowering their requests would free real scheduling capacity on this single-node cluster.\n- **Memory sizing is healthy** — no action needed there.\n- **Resource-limit hygiene is clean** — every container has both limits set; keep this as a standard for any new service added to the namespace.\n- **Widen the time range on the restarts/OOM chart** to see the historical incident pattern; nothing is happening right now, but the 30-day history is worth reviewing alongside the Incident \u0026 Reliability Retrospective notebook.",
+        "type": "markdown"
+      }
+    ],
+    "version": "7"
+  }
+}

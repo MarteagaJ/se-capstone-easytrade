@@ -1,0 +1,173 @@
+{
+  "id": "c8f7eb5d-082a-40f0-a5dc-98ff21626a04",
+  "name": "EasyTrade - Incident \u0026 Reliability Retrospective",
+  "type": "notebook",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 1,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-17T22:14:38.614Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-17T22:14:38.614Z"
+  },
+  "content": {
+    "defaultTimeframe": {
+      "from": "now()-30d",
+      "to": "now()"
+    },
+    "sections": [
+      {
+        "id": "1",
+        "markdown": "# 🔎 EasyTrade — Incident \u0026 Reliability Retrospective\n*A 30-day look back at Davis-detected problems, how long they took to resolve, and how exceptions and log errors trended around them.*",
+        "type": "markdown"
+      },
+      {
+        "id": "2",
+        "markdown": "## Problem Volume \u0026 Category Trend\nDaily problem count over the last 30 days, split by category. Spikes here are the fastest way to spot a bad day before reading the incident list below.",
+        "type": "markdown"
+      },
+      {
+        "id": "3",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch dt.davis.problems, from:-30d\n| filter not(dt.davis.is_duplicate)\n| makeTimeseries count(), interval:1d, by:{event.category}"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "areaChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Problems per Day by Category",
+        "type": "dql"
+      },
+      {
+        "id": "4",
+        "markdown": "## Resolution Time by Category — A Surprising Gap\n**AVAILABILITY problems ('Monitoring not available', 'Host or monitoring unavailable') take an average of ~10.9 hours to resolve — nearly 30x longer than ERROR problems (~22 minutes) or the SLOWDOWN problem (~23 minutes) in the same window.** Application-level issues are being caught and resolved fast; infrastructure/monitoring-availability blips are the long-tail risk here and worth a closer look at whether they're self-resolving noise or a real gap in host/monitoring reliability.",
+        "type": "markdown"
+      },
+      {
+        "id": "5",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch dt.davis.problems, from:-30d\n| filter not(dt.davis.is_duplicate) and isNotNull(event.end)\n| fieldsAdd duration_min = (event.end - event.start) / 1m\n| summarize count(), avg_duration_min = round(avg(duration_min), decimals:1), by:{event.category}\n| sort avg_duration_min desc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "categoricalBarChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Average Resolution Time by Category (Minutes)",
+        "type": "dql"
+      },
+      {
+        "id": "6",
+        "markdown": "## Longest-Running Incidents\nThe individual problems behind that AVAILABILITY average — the single longest ran for over 61 hours (`P-2609125`, 'Monitoring not available').",
+        "type": "markdown"
+      },
+      {
+        "id": "7",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch dt.davis.problems, from:-30d\n| filter not(dt.davis.is_duplicate)\n| fieldsAdd duration_min = round((coalesce(event.end, now()) - event.start) / 1m, decimals:1)\n| fields display_id, event.name, event.category, event.start, duration_min\n| sort duration_min desc\n| limit 10"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "table",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Top 10 Longest Problems",
+        "type": "dql"
+      },
+      {
+        "id": "8",
+        "markdown": "## Exception Activity Trend\nApplication exceptions over time by service — a leading indicator that often moves before a Davis problem is even created.",
+        "type": "markdown"
+      },
+      {
+        "id": "9",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch spans, from:-24h\n| filter iAny(span.events[][span_event.name] == \"exception\")\n| makeTimeseries occurrences = count(), interval:1h, by:{dt.service.name}"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "areaChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Exceptions Over Time by Service",
+        "type": "dql"
+      },
+      {
+        "id": "10",
+        "markdown": "## Log Error Trend\nOverall log volume vs. error volume — a sustained rise in the error line without a matching rise in total volume is the clearest early warning sign of a brewing incident.",
+        "type": "markdown"
+      },
+      {
+        "id": "11",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch logs, from:-24h\n| makeTimeseries total = count(), errors = countIf(status == \"ERROR\"), interval:1h"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "areaChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Log Volume \u0026 Errors Over Time",
+        "type": "dql"
+      },
+      {
+        "id": "12",
+        "markdown": "## Takeaways\n- **AVAILABILITY problems are the real reliability tax** — nearly 30x longer to resolve than ERROR or SLOWDOWN problems. Worth root-causing whether these are transient monitoring gaps or a genuine host/agent stability issue.\n- **No currently active problems** — everything in this review is historical; the platform is healthy right now.\n- **Davis has not attributed a root-cause entity to any of these problems** (`root_cause_entity_id` is null across the board) — if that's unexpected, it's worth checking whether root-cause analysis is fully enabled for this environment.\n- **Cross-reference the exception and log-error trends** against the problem timeline above when investigating a specific incident — they're the fastest way to find the first signal that something was going wrong.",
+        "type": "markdown"
+      }
+    ],
+    "version": "7"
+  }
+}
