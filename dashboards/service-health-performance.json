@@ -1,0 +1,298 @@
+{
+  "id": "04a9dc0b-11f5-4769-b415-d0695d37d418",
+  "name": "EasyTrade - Service Health \u0026 Performance",
+  "type": "dashboard",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 1,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-17T03:59:07.775Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-17T03:59:07.775Z"
+  },
+  "content": {
+    "layouts": {
+      "1": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "10": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "11": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "12": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "13": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "2": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 2
+      },
+      "3": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 2
+      },
+      "4": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 2
+      },
+      "5": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 2
+      },
+      "6": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "7": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 7
+      },
+      "8": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "9": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      }
+    },
+    "tiles": {
+      "1": {
+        "content": "# ⚙️ EasyTrade — Service Health \u0026 Performance\nRED metrics (Rate, Errors, Duration) across the EasyTrade microservices, sourced from distributed traces and service metrics.",
+        "type": "markdown"
+      },
+      "10": {
+        "query": "fetch spans\n| filter request.is_root_span == true\n| summarize total = count(), failed = countIf(request.is_failed == true), by:{dt.service.name}\n| fieldsAdd error_rate_pct = round(failed * 100.0 / total, decimals:2)\n| fields dt.service.name, error_rate_pct\n| sort error_rate_pct desc\n| limit 10",
+        "querySettings": {},
+        "title": "Error Rate by Service (%)",
+        "type": "data",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {
+          "categoryAxis": {
+            "label": {
+              "label": "Service",
+              "showLabel": true
+            }
+          },
+          "colorModeType": {
+            "colorCategoryMode": "multi-color",
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "displayedFields": [
+              "dt.service.name"
+            ],
+            "values": [
+              "error_rate_pct"
+            ]
+          },
+          "numericAxis": {
+            "label": {
+              "label": "Error Rate (%)",
+              "showLabel": true
+            }
+          }
+        }
+      },
+      "11": {
+        "query": "fetch spans\n| filter request.is_root_span == true and request.is_failed == true\n| fields start_time, endpoint.name, dt.service.name, http.response.status_code, duration\n| sort start_time desc\n| limit 20",
+        "querySettings": {},
+        "title": "Recent Failed Requests",
+        "type": "data",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "columnWidthStrategy": "content",
+            "rowDensity": "condensed"
+          }
+        }
+      },
+      "12": {
+        "content": "## Slowest Endpoints",
+        "type": "markdown"
+      },
+      "13": {
+        "query": "fetch spans\n| filter request.is_root_span == true\n| summarize requests = count(), p95 = percentile(duration, 95), by:{endpoint.name, dt.service.name}\n| sort p95 desc\n| limit 15",
+        "querySettings": {},
+        "title": "Top Slow Endpoints by P95",
+        "type": "data",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "columnWidthStrategy": "content",
+            "rowDensity": "condensed"
+          }
+        }
+      },
+      "2": {
+        "query": "fetch spans\n| filter request.is_root_span == true\n| summarize total = count()",
+        "querySettings": {},
+        "title": "Total Requests",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "total"
+            },
+            "icon": "AnalyticsIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "3": {
+        "query": "fetch spans\n| filter request.is_root_span == true\n| summarize total = count(), failed = countIf(request.is_failed == true)\n| fieldsAdd error_rate_pct = round(failed * 100.0 / total, decimals:2)",
+        "querySettings": {},
+        "title": "Overall Error Rate (%)",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "error_rate_pct"
+            },
+            "icon": "ErrorIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "4": {
+        "query": "fetch spans\n| filter request.is_root_span == true\n| summarize p95 = percentile(duration, 95)",
+        "querySettings": {},
+        "title": "P95 Response Time",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "p95"
+            },
+            "icon": "ClockIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "5": {
+        "query": "fetch spans\n| filter request.is_root_span == true\n| summarize active_services = countDistinct(dt.service.name)",
+        "querySettings": {},
+        "title": "Active Services",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "active_services"
+            },
+            "icon": "AppIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "6": {
+        "content": "## Request Volume \u0026 Latency",
+        "type": "markdown"
+      },
+      "7": {
+        "query": "timeseries p95 = percentile(dt.service.request.response_time, 95, rollup:avg), by:{dt.service.name}",
+        "querySettings": {},
+        "title": "P95 Response Time by Service",
+        "type": "data",
+        "visualization": "lineChart",
+        "visualizationSettings": {
+          "colorModeType": {
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "interval": "interval",
+            "names": [
+              "dt.service.name"
+            ],
+            "time": "timeframe",
+            "values": [
+              "p95"
+            ]
+          }
+        }
+      },
+      "8": {
+        "query": "fetch spans\n| filter request.is_root_span == true\n| summarize requests = count(), by:{dt.service.name}\n| sort requests desc\n| limit 10",
+        "querySettings": {},
+        "title": "Request Volume by Service",
+        "type": "data",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {
+          "categoryAxis": {
+            "label": {
+              "label": "Service",
+              "showLabel": true
+            }
+          },
+          "colorModeType": {
+            "colorCategoryMode": "multi-color",
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "displayedFields": [
+              "dt.service.name"
+            ],
+            "values": [
+              "requests"
+            ]
+          },
+          "layout": {
+            "groupMode": "stacked",
+            "position": "horizontal"
+          },
+          "numericAxis": {
+            "label": {
+              "label": "Requests",
+              "showLabel": true
+            }
+          }
+        }
+      },
+      "9": {
+        "content": "## Errors \u0026 Reliability",
+        "type": "markdown"
+      }
+    },
+    "variables": [],
+    "version": 21
+  }
+}

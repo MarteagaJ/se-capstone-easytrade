@@ -1,0 +1,344 @@
+{
+  "id": "19c97cb6-0d98-4031-9423-30d5fac8ad3c",
+  "name": "EasyTrade - Infrastructure \u0026 Kubernetes Health",
+  "type": "dashboard",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 1,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-17T03:59:09.487Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-17T03:59:09.487Z"
+  },
+  "content": {
+    "layouts": {
+      "1": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "10": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "11": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "12": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "13": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "14": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
+      "15": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
+      "2": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 2
+      },
+      "3": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 2
+      },
+      "4": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 2
+      },
+      "5": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 2
+      },
+      "6": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 2
+      },
+      "7": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 2
+      },
+      "8": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "9": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      }
+    },
+    "tiles": {
+      "1": {
+        "content": "# 🖥️ EasyTrade — Infrastructure \u0026 Kubernetes Health\nHost and container resource usage across the `local-wsl-capstone` cluster, sourced from OneAgent host and Kubernetes metrics.",
+        "type": "markdown"
+      },
+      "10": {
+        "content": "## Container Resource Usage by Workload",
+        "type": "markdown"
+      },
+      "11": {
+        "query": "timeseries cpu = avg(dt.kubernetes.container.cpu_usage, scalar:true), by:{k8s.workload.name, k8s.namespace.name}\n| filter k8s.namespace.name == \"easytrade\"\n| fields k8s.workload.name, cpu\n| sort cpu desc\n| limit 10",
+        "querySettings": {},
+        "title": "Container CPU by Workload (%)",
+        "type": "data",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {
+          "categoryAxis": {
+            "label": {
+              "label": "Workload",
+              "showLabel": true
+            }
+          },
+          "colorModeType": {
+            "colorCategoryMode": "multi-color",
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "displayedFields": [
+              "k8s.workload.name"
+            ],
+            "values": [
+              "cpu"
+            ]
+          },
+          "numericAxis": {
+            "label": {
+              "label": "CPU Usage (%)",
+              "showLabel": true
+            }
+          }
+        }
+      },
+      "12": {
+        "query": "timeseries mem_bytes = avg(dt.kubernetes.container.memory_working_set, scalar:true), by:{k8s.workload.name, k8s.namespace.name}\n| filter k8s.namespace.name == \"easytrade\"\n| fieldsAdd mem_mb = round(mem_bytes / 1024 / 1024, decimals:1)\n| fields k8s.workload.name, mem_mb\n| sort mem_mb desc\n| limit 10",
+        "querySettings": {},
+        "title": "Container Memory by Workload (MB)",
+        "type": "data",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {
+          "categoryAxis": {
+            "label": {
+              "label": "Workload",
+              "showLabel": true
+            }
+          },
+          "colorModeType": {
+            "colorCategoryMode": "multi-color",
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "displayedFields": [
+              "k8s.workload.name"
+            ],
+            "values": [
+              "mem_mb"
+            ]
+          },
+          "numericAxis": {
+            "label": {
+              "label": "Memory (MB)",
+              "showLabel": true
+            }
+          }
+        }
+      },
+      "13": {
+        "content": "## Cluster Composition \u0026 Stability",
+        "type": "markdown"
+      },
+      "14": {
+        "query": "smartscapeNodes \"K8S_POD\"\n| summarize pods = count(), by:{k8s.namespace.name}",
+        "querySettings": {},
+        "title": "Pod Distribution by Namespace",
+        "type": "data",
+        "visualization": "donutChart",
+        "visualizationSettings": {
+          "dataMapping": {
+            "displayedFields": [
+              "k8s.namespace.name"
+            ],
+            "value": "pods"
+          },
+          "labels": {
+            "showLabels": true
+          }
+        }
+      },
+      "15": {
+        "query": "timeseries restarts = sum(dt.kubernetes.container.restarts, scalar:true), by:{k8s.workload.name, k8s.namespace.name}\n| filter restarts \u003e 0\n| fields k8s.namespace.name, k8s.workload.name, restarts\n| sort restarts desc\n| limit 10",
+        "querySettings": {},
+        "title": "Workloads with Restarts",
+        "type": "data",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "columnWidthStrategy": "content",
+            "rowDensity": "condensed"
+          }
+        }
+      },
+      "2": {
+        "query": "timeseries cpu = avg(dt.host.cpu.usage, scalar:true)",
+        "querySettings": {},
+        "title": "Host CPU (%)",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "cpu"
+            },
+            "icon": "CpuIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "3": {
+        "query": "timeseries mem = avg(dt.host.memory.usage, scalar:true)",
+        "querySettings": {},
+        "title": "Host Memory (%)",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "mem"
+            },
+            "icon": "MemoryIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "4": {
+        "query": "smartscapeNodes \"K8S_POD\"\n| filter k8s.namespace.name == \"easytrade\"\n| summarize count()",
+        "querySettings": {},
+        "title": "Pods Running",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "count()"
+            },
+            "icon": "KubernetesIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "5": {
+        "query": "smartscapeNodes \"K8S_POD\"\n| filter k8s.namespace.name == \"easytrade\"\n| summarize workloads = countDistinct(k8s.workload.name)",
+        "querySettings": {},
+        "title": "Workloads",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "workloads"
+            },
+            "icon": "AppIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "6": {
+        "query": "timeseries restarts = sum(dt.kubernetes.container.restarts, scalar:true)",
+        "querySettings": {},
+        "title": "Container Restarts",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "restarts"
+            },
+            "icon": "RefreshIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "7": {
+        "query": "timeseries oom = sum(dt.kubernetes.container.oom_kills, scalar:true)",
+        "querySettings": {},
+        "title": "OOM Kills",
+        "type": "data",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "dataMapping": {
+              "value": "oom"
+            },
+            "icon": "WarningIcon",
+            "showIcon": true
+          }
+        }
+      },
+      "8": {
+        "content": "## Host Resource Usage",
+        "type": "markdown"
+      },
+      "9": {
+        "query": "timeseries {cpu = avg(dt.host.cpu.usage), mem = avg(dt.host.memory.usage)}, by:{dt.smartscape.host}",
+        "querySettings": {},
+        "title": "Host CPU \u0026 Memory Over Time",
+        "type": "data",
+        "visualization": "areaChart",
+        "visualizationSettings": {
+          "colorModeType": {
+            "colorPalette": "categorical"
+          },
+          "dataMapping": {
+            "interval": "interval",
+            "names": [
+              "dt.smartscape.host"
+            ],
+            "time": "timeframe",
+            "values": [
+              "cpu",
+              "mem"
+            ]
+          }
+        }
+      }
+    },
+    "variables": [],
+    "version": 21
+  }
+}
