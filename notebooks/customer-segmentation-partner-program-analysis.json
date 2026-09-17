@@ -1,0 +1,168 @@
+{
+  "id": "b364acfd-4f9f-4e31-9713-1437e0b858e2",
+  "name": "EasyTrade - Customer Segmentation \u0026 Partner Program Analysis",
+  "type": "notebook",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 1,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-17T15:18:17.654Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-17T15:18:17.654Z"
+  },
+  "content": {
+    "defaultTimeframe": {
+      "from": "now()-7d",
+      "to": "now()"
+    },
+    "sections": [
+      {
+        "id": "1",
+        "markdown": "# 👥 EasyTrade — Customer Segmentation \u0026 Partner Program Analysis\n*7-day review of the customer base by subscription tier, whether tier reflects actual trading behavior, and how the partner offer program is performing.*",
+        "type": "markdown"
+      },
+      {
+        "id": "2",
+        "markdown": "## Customer Base by Package Tier\nHow the active customer base splits across the 3 subscription package tiers.",
+        "type": "markdown"
+      },
+      {
+        "id": "3",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-30d\n| filter event.type == \"com.easytrade.account\"\n| summarize takeLast(packageId), by:{accountId}\n| fieldsRename tier = `takeLast(packageId)`\n| summarize accounts = count(), by:{tier}\n| sort tier asc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "donutChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Customers by Package Tier",
+        "type": "dql"
+      },
+      {
+        "id": "4",
+        "markdown": "## Upsell Opportunity — Does Tier Predict Activity?\nIf higher tiers traded meaningfully more, that would justify tier-based upsell campaigns. **They don't** — average trading volume per trader is essentially flat across all 3 tiers (~$320K–$339K per trader). Package tier is not currently a useful proxy for trading engagement, which suggests upsell targeting should be based on actual activity data instead of the tier a customer happens to be on.",
+        "type": "markdown"
+      },
+      {
+        "id": "5",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| fieldsAdd notional = amount * price\n| join [\n    fetch bizevents, from:-7d\n    | filter event.type == \"com.easytrade.account\"\n    | summarize tier = takeLast(packageId), by:{accountId}\n  ], on:{accountId}\n| summarize volume = round(sum(notional)), trades = count(), traders = countDistinct(accountId), by:{tier = right.tier}\n| fieldsAdd avg_volume_per_trader = round(volume / traders)\n| sort tier asc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "table",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Trading Volume \u0026 Avg. Volume per Trader by Tier",
+        "type": "dql"
+      },
+      {
+        "id": "6",
+        "markdown": "## Partner Offer Program\nEasyTrade surfaces cross-sell offers from 5 partner brands. Engagement is currently distributed almost perfectly evenly across all 5 (~510 views each) — the offer-serving logic shows no partner bias.",
+        "type": "markdown"
+      },
+      {
+        "id": "7",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter event.type == \"com.easytrade.offer\"\n| fieldsAdd partner = arrayElement(splitString(event.category, \"/\"), 3)\n| summarize views = count(), by:{partner}\n| sort views desc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "categoricalBarChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Partner Offer Engagement",
+        "type": "dql"
+      },
+      {
+        "id": "8",
+        "markdown": "## Partner Program Trend Over Time\nOffer views over time by partner — flat, parallel lines would confirm the even-rotation logic is holding steady rather than drifting toward any one partner.",
+        "type": "markdown"
+      },
+      {
+        "id": "9",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter event.type == \"com.easytrade.offer\"\n| fieldsAdd partner = arrayElement(splitString(event.category, \"/\"), 3)\n| makeTimeseries views = count(), interval:12h, by:{partner}"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "lineChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Partner Offer Views Over Time",
+        "type": "dql"
+      },
+      {
+        "id": "10",
+        "markdown": "## Customer Engagement Cadence\nDaily count of distinct accounts logging in — the platform's day-to-day active user trend.",
+        "type": "markdown"
+      },
+      {
+        "id": "11",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter event.type == \"com.easytrade.login\"\n| makeTimeseries active_accounts = countDistinct(accountId), interval:1d"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "lineChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Daily Active Accounts (Logins)",
+        "type": "dql"
+      }
+    ],
+    "version": "7"
+  }
+}

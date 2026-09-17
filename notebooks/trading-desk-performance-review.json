@@ -1,0 +1,191 @@
+{
+  "id": "2dd0a782-cb72-46d0-a3c3-5b638a605eba",
+  "name": "EasyTrade - Trading Desk Performance Review",
+  "type": "notebook",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "version": 1,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-17T15:18:13.439Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-17T15:18:13.439Z"
+  },
+  "content": {
+    "defaultTimeframe": {
+      "from": "now()-7d",
+      "to": "now()"
+    },
+    "sections": [
+      {
+        "id": "1",
+        "markdown": "# 📈 EasyTrade — Trading Desk Performance Review\n*7-day business review of trading activity, risk concentration, and capital flow.*\n\nThis notebook walks through the health of the trading desk: how much volume is moving, whether that volume is dangerously concentrated in a few instruments, how trades are performing, and whether the platform is retaining or losing capital.",
+        "type": "markdown"
+      },
+      {
+        "id": "2",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| fieldsAdd notional = amount * price\n| summarize total_trades = count(), total_volume = round(sum(notional))"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "table",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Trading Activity — 7-Day Snapshot",
+        "type": "dql"
+      },
+      {
+        "id": "3",
+        "markdown": "## Trading Volume Trend\nTrade counts by type (long buy/sell, quick buy/sell) over the review window.",
+        "type": "markdown"
+      },
+      {
+        "id": "4",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| makeTimeseries trades = count(), interval:6h, by:{event.type}"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "areaChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Trading Activity Over Time",
+        "type": "dql"
+      },
+      {
+        "id": "5",
+        "markdown": "## Instrument Concentration — Risk Lens\nAcross the 15 traded instruments, the **top 3 account for ~38% of total volume** — a moderately diversified book with no single-instrument concentration risk. The chart below shows the full distribution.",
+        "type": "markdown"
+      },
+      {
+        "id": "6",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| fieldsAdd notional = amount * price\n| summarize volume = round(sum(notional)), trades = count(), by:{instrumentId}\n| sort volume desc"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "categoricalBarChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Trading Volume by Instrument",
+        "type": "dql"
+      },
+      {
+        "id": "7",
+        "markdown": "## Win / Loss Performance\nLong trades close as either a win (target hit) or a loss. Both directions currently sit close to a coin-flip — buy and sell signals are performing symmetrically, with no directional bias worth flagging.",
+        "type": "markdown"
+      },
+      {
+        "id": "8",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter event.type == \"com.easytrade.trade-closed\"\n| summarize total = count(), wins = countIf(happened == true), by:{direction}\n| fieldsAdd win_rate_pct = round(wins * 100.0 / total, decimals:1)"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "table",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Win Rate by Trade Direction",
+        "type": "dql"
+      },
+      {
+        "id": "9",
+        "markdown": "## Capital Flow — Deposits vs. Withdrawals\nThe running (cumulative) net of deposits minus withdrawals shows whether the platform is a net destination or source of customer capital over time. A rising line means the platform is retaining capital; a falling line means customers are net-withdrawing.",
+        "type": "markdown"
+      },
+      {
+        "id": "10",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter in(event.type, {\"com.easytrade.deposit\",\"com.easytrade.withdraw\"})\n| fieldsAdd signed = if(event.type == \"com.easytrade.deposit\", amount, else: -amount)\n| makeTimeseries net = sum(signed), interval:2h\n| fieldsAdd cumulative_net_flow = arrayCumulativeSum(net)"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "lineChart",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Cumulative Net Capital Flow ($)",
+        "type": "dql"
+      },
+      {
+        "id": "11",
+        "markdown": "## Top Traders by Volume\nOur most active accounts by trade volume — useful for VIP/relationship management and understanding who drives desk revenue.",
+        "type": "markdown"
+      },
+      {
+        "id": "12",
+        "showInput": true,
+        "state": {
+          "input": {
+            "value": "fetch bizevents, from:-7d\n| filter in(event.type, {\"com.easytrade.long-buy\",\"com.easytrade.long-sell\",\"com.easytrade.quick-buy\",\"com.easytrade.quick-sell\"})\n| fieldsAdd notional = amount * price\n| summarize trades = count(), volume = round(sum(notional)), by:{accountId}\n| sort volume desc\n| limit 10"
+          },
+          "querySettings": {
+            "defaultSamplingRatio": 10,
+            "defaultScanLimitGbytes": 500,
+            "enableSampling": false,
+            "maxResultMegaBytes": 1,
+            "maxResultRecords": 1000
+          },
+          "visualization": "table",
+          "visualizationSettings": {
+            "autoSelectVisualization": false,
+            "chartSettings": {}
+          }
+        },
+        "title": "Top 10 Accounts by Trade Volume",
+        "type": "dql"
+      }
+    ],
+    "version": "7"
+  }
+}
