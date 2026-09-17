@@ -1,0 +1,472 @@
+{
+  "id": "71c04634-a608-4a2c-8438-a87453fa9150",
+  "name": "Main Observability",
+  "type": "launchpad",
+  "owner": "614c522b-9416-486e-9f55-0efff4be270e",
+  "isPrivate": true,
+  "description": "One-stop launchpad for the EasyTrade capstone demo: every Dynatrace app needed to walk through the demo requirements, plus direct links to the bizevent dashboards built in this repo.",
+  "version": 1,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2026-09-16T22:30:08.556Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2026-09-16T22:30:08.556Z"
+  },
+  "content": {
+    "background": "default",
+    "containerList": {
+      "containers": [
+        {
+          "blocks": [
+            {
+              "content": "# 🧭 EasyTrade — Main Observability\n\n![EasyTrade dashboard](https://dt-cdn.net/images/financial-account-opening-dashboard-2486-db43437d61.png)\n\n---",
+              "id": "e2e23c62-b39a-45f9-9f43-c149a43d3a0a",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "content": [
+                {
+                  "action": {
+                    "type": "openExternalLink",
+                    "url": "/ui/apps/dynatrace.dashboards/dashboard/dfef7352-fa2d-44b6-9e63-bd94ed958375#from=now%28%29-24h\u0026to=now%28%29"
+                  },
+                  "buttonName": "Open dashboard",
+                  "description": "Trade volume, buy/sell mix, top instruments, win rate, net capital flow, top accounts.",
+                  "id": "69b1e656-3654-4699-8568-7476fbbc0c12",
+                  "imageDark": "https://dt-cdn.net/images/financial-account-opening-dashboard-2486-db43437d61.png",
+                  "imageLight": "https://dt-cdn.net/images/financial-account-opening-dashboard-2486-db43437d61.png",
+                  "title": "Trading \u0026 Revenue Performance"
+                },
+                {
+                  "action": {
+                    "type": "openExternalLink",
+                    "url": "/ui/apps/dynatrace.dashboards/dashboard/3c3319ba-f540-4748-a4c1-65ae07768294#from=now%28%29-24h\u0026to=now%28%29"
+                  },
+                  "buttonName": "Open dashboard",
+                  "description": "RUM-sourced funnel conversion and error rates, geographic and browser/OS reach.",
+                  "id": "1df0a9dd-5894-41dc-80d8-01c3c188d1e4",
+                  "imageDark": "https://dt-cdn.net/images/retail-order-dashboard-2490-a4cd06f1b3.png",
+                  "imageLight": "https://dt-cdn.net/images/retail-order-dashboard-2490-a4cd06f1b3.png",
+                  "title": "Customer Conversion \u0026 Reach"
+                },
+                {
+                  "action": {
+                    "type": "openExternalLink",
+                    "url": "/ui/apps/dynatrace.dashboards/dashboard/a53ec0ae-55b0-4182-b667-40ad25785e8c#from=now%28%29-24h\u0026to=now%28%29"
+                  },
+                  "buttonName": "Open dashboard",
+                  "description": "Account tiers, login activity, and partner offer engagement.",
+                  "id": "a343f05f-8b50-4922-bdf4-8c32cbb8c00f",
+                  "imageDark": "https://dt-cdn.net/images/astroshop-dashboard-2242-803286c626.png",
+                  "imageLight": "https://dt-cdn.net/images/astroshop-dashboard-2242-803286c626.png",
+                  "title": "Customer Base \u0026 Engagement"
+                }
+              ],
+              "id": "c8e79704-46e7-4f81-b5cc-0beb78342fa2",
+              "properties": {
+                "expanded": true
+              },
+              "type": "cards"
+            },
+            {
+              "content": "## 1. Infrastructure\nDemonstrate the health and performance of the infrastructure that makes up the environment, including Kubernetes.",
+              "id": "8a62b667-4a83-4c40-b270-b0301cfb7712",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.infraops",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.infraops",
+                  "id": "fdd42f7f-ecc8-4736-8ea4-b939326708a3",
+                  "status": "accessible",
+                  "title": "Infrastructure \u0026 Operations",
+                  "type": "app"
+                },
+                {
+                  "action": {
+                    "appId": "dynatrace.kubernetes",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.kubernetes",
+                  "id": "043ddf0a-5168-4598-b8fa-89f429dc2226",
+                  "status": "accessible",
+                  "title": "Kubernetes",
+                  "type": "app"
+                }
+              ],
+              "contentType": "static",
+              "description": "Host, process, and Kubernetes health and performance.",
+              "id": "003a6861-bfdd-4561-bc09-08478c22f091",
+              "properties": {
+                "expanded": true
+              },
+              "title": "Infrastructure apps",
+              "type": "links"
+            },
+            {
+              "content": "## 2. Services\nReal-time monitoring of service health and performance across the EasyTrade microservices.",
+              "id": "90077a34-05aa-495f-91d8-669e796d3a23",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.services",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.services",
+                  "id": "77f27e95-03d2-4e10-9950-f3e77536cefe",
+                  "status": "accessible",
+                  "title": "Services",
+                  "type": "app"
+                }
+              ],
+              "contentType": "static",
+              "description": "Service-level RED metrics and health.",
+              "id": "782167c0-49c6-4911-b969-69e34ea9f904",
+              "properties": {
+                "expanded": true
+              },
+              "title": "Service apps",
+              "type": "links"
+            },
+            {
+              "content": "## 3. Traces\nDistributed traces across the EasyTrade services to analyze where time is spent, service interactions, and error inspection.",
+              "id": "adf08520-a056-4657-8ca4-bfb005220024",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.distributedtracing",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.distributedtracing",
+                  "id": "7aaaae5d-2770-48f5-b2df-4770100c4428",
+                  "status": "accessible",
+                  "title": "Distributed Tracing",
+                  "type": "app"
+                }
+              ],
+              "contentType": "static",
+              "description": "End-to-end distributed traces.",
+              "id": "3cad2895-6d67-47ed-b726-c9a69fd5d9ae",
+              "properties": {
+                "expanded": true
+              },
+              "title": "Tracing apps",
+              "type": "links"
+            },
+            {
+              "content": "## 4. Logs\nHost, process, and application logs ingested from EasyTrade, in context of traces, and queryable directly.",
+              "id": "ef0f7fd1-63a9-4b23-b1cb-aca47ccada67",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.logs",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.logs",
+                  "id": "3880497c-ff23-41dc-ad65-8f7e6231fbe9",
+                  "status": "accessible",
+                  "title": "Logs",
+                  "type": "app"
+                }
+              ],
+              "contentType": "static",
+              "description": "Query and correlate logs.",
+              "id": "7c2e0919-a854-49cf-8f0a-5e9ae54ce126",
+              "properties": {
+                "expanded": true
+              },
+              "title": "Log apps",
+              "type": "links"
+            },
+            {
+              "content": "## 5. Frontend / Real User Monitoring\nCore Web Vitals, session data, and frontend error tracking for the EasyTrade web frontend, tied to backend services.",
+              "id": "17d99e04-acff-4e44-8989-ae20f01fb194",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.experience.vitals",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.experience.vitals",
+                  "id": "500f7781-708a-4419-b46d-6cc4812ab0ca",
+                  "status": "accessible",
+                  "title": "Experience Vitals",
+                  "type": "app"
+                },
+                {
+                  "action": {
+                    "appId": "dynatrace.users.sessions",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.users.sessions",
+                  "id": "add062b5-2098-4aa5-b529-0d4097ee79ee",
+                  "status": "accessible",
+                  "title": "Users \u0026 Sessions",
+                  "type": "app"
+                }
+              ],
+              "contentType": "static",
+              "description": "Real user monitoring and session-level detail.",
+              "id": "fb7585bc-e01e-48de-ac9f-8257c943da12",
+              "properties": {
+                "expanded": true
+              },
+              "title": "Frontend / RUM apps",
+              "type": "links"
+            },
+            {
+              "content": "## 6. Dashboards\nEnvironment health from both an application and infrastructure perspective — including the three EasyTrade bizevent dashboards built in this repo (see the cards above for direct links).",
+              "id": "fe7e367f-cfd8-4eaa-920c-444ae15d24fe",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.dashboards",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.dashboards",
+                  "id": "da4d94e5-6a15-481a-ae83-bdf9745b19d3",
+                  "status": "accessible",
+                  "title": "Dashboards",
+                  "type": "app"
+                },
+                {
+                  "action": {
+                    "documentId": "dfef7352-fa2d-44b6-9e63-bd94ed958375",
+                    "type": "openDocument"
+                  },
+                  "categoryId": "dashboards",
+                  "icon": "",
+                  "id": "629b5457-1545-4d45-b65e-09f0b58f640b",
+                  "title": "Trading \u0026 Revenue Performance",
+                  "type": "doc"
+                },
+                {
+                  "action": {
+                    "documentId": "3c3319ba-f540-4748-a4c1-65ae07768294",
+                    "type": "openDocument"
+                  },
+                  "categoryId": "dashboards",
+                  "icon": "",
+                  "id": "aee18e96-b4fd-415e-aa1d-593a0dc6d911",
+                  "title": "Customer Conversion \u0026 Reach",
+                  "type": "doc"
+                },
+                {
+                  "action": {
+                    "documentId": "a53ec0ae-55b0-4182-b667-40ad25785e8c",
+                    "type": "openDocument"
+                  },
+                  "categoryId": "dashboards",
+                  "icon": "",
+                  "id": "0006b0d0-9b0c-4708-8dc6-39ea505eca30",
+                  "title": "Customer Base \u0026 Engagement",
+                  "type": "doc"
+                }
+              ],
+              "contentType": "static",
+              "description": "Browse all dashboards, or jump straight to the EasyTrade ones.",
+              "id": "e163c13d-80c4-4ea9-99e8-fb6e924f8fb2",
+              "properties": {
+                "expanded": true
+              },
+              "title": "Dashboards",
+              "type": "links"
+            },
+            {
+              "content": "## 7. AI-Driven Analysis\nDavis AI anomaly detection and Dynatrace Intelligence for investigating detected problems.",
+              "id": "0c80b279-cf74-406d-bba6-2ef738a12950",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.davis.problems",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.davis.problems",
+                  "id": "6946883c-1041-4b3a-ad5c-bb6c32e9f35e",
+                  "status": "accessible",
+                  "title": "Problems",
+                  "type": "app"
+                },
+                {
+                  "action": {
+                    "appId": "dynatrace.davis.copilot",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.davis.copilot",
+                  "id": "774b6d17-83e4-4934-96be-66250ebd4f5d",
+                  "status": "accessible",
+                  "title": "Dynatrace Assist",
+                  "type": "app"
+                }
+              ],
+              "contentType": "static",
+              "description": "Investigate Davis-detected problems and ask Dynatrace Assist.",
+              "id": "b041c5ca-6910-4814-ba2b-48b259b27d7a",
+              "properties": {
+                "expanded": true
+              },
+              "title": "AI-driven analysis apps",
+              "type": "links"
+            },
+            {
+              "content": "## 8. Notebooks and DQL\nBuild notebooks with DQL queries — written by hand or generated by Dynatrace Assist.",
+              "id": "c8c7f3e9-2e4b-4733-ad8b-d78b9f5bb52c",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.notebooks",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.notebooks",
+                  "id": "0ca7392a-ea10-4b9e-a462-b10462785e60",
+                  "status": "accessible",
+                  "title": "Notebooks",
+                  "type": "app"
+                }
+              ],
+              "contentType": "static",
+              "description": "DQL notebooks for ad hoc analysis.",
+              "id": "20b89849-0f65-4689-8354-6ae3cfea694f",
+              "properties": {
+                "expanded": true
+              },
+              "title": "Notebook apps",
+              "type": "links"
+            },
+            {
+              "content": "## Business Observability\n\n![Business Flow](https://dt-cdn.net/images/financial-account-opening-bizflow-1755-88b9e100ef.png)",
+              "id": "a3e025e3-1e34-4d09-9bbd-4394fa6850f2",
+              "properties": {
+                "expanded": true
+              },
+              "type": "markdown"
+            },
+            {
+              "appearance": "list",
+              "content": [
+                {
+                  "action": {
+                    "appId": "dynatrace.biz.explore",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.biz.explore",
+                  "id": "c103942a-e301-4a64-a9a2-be319fced303",
+                  "status": "accessible",
+                  "title": "Explore Business Events",
+                  "type": "app"
+                },
+                {
+                  "action": {
+                    "appId": "dynatrace.biz.flow",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.biz.flow",
+                  "id": "ac4a340a-eb69-4ccf-a766-8b3d72243744",
+                  "status": "accessible",
+                  "title": "Business Flow",
+                  "type": "app"
+                },
+                {
+                  "action": {
+                    "appId": "dynatrace.openpipeline",
+                    "type": "openApp"
+                  },
+                  "categoryId": "apps",
+                  "icon": "/platform/app-engine/registry/v1/app-icons/dynatrace.openpipeline",
+                  "id": "0c8065a1-f04b-4944-bc32-c245cfead824",
+                  "status": "accessible",
+                  "title": "OpenPipeline",
+                  "type": "app"
+                }
+              ],
+              "contentType": "static",
+              "description": "Explore business events, business flows, and OpenPipeline configuration.",
+              "id": "b448bf78-d184-48c1-8c51-88c7972467e8",
+              "properties": {
+                "expanded": true
+              },
+              "title": "Bizevents apps",
+              "type": "links"
+            }
+          ],
+          "horizontalLayoutWeight": 1
+        }
+      ]
+    },
+    "icon": "default",
+    "schemaVersion": 2
+  }
+}
