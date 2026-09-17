@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+#
+# Enables or disables one or more EasyTrade feature flags via the
+# feature-flag-service REST API.
+#
+# Inputs (environment variables):
+#   FEATURE_FLAG_STATE  Required. Desired state for every flag listed in
+#                       FEATURE_FLAG_IDS: enable|disable (also accepts
+#                       true|false, on|off, 1|0).
+#   FEATURE_FLAG_IDS    Required. Comma-separated flag id(s), e.g.
+#                       "db_not_responding" or
+#                       "db_not_responding,high_cpu_usage".
+#   FEATURE_FLAG_SERVICE_URL
+#                       Optional. Base URL of the feature-flag-service.
+#                       Default: http://localhost/feature-flag-service
+#                       (the nginx reverse proxy path used throughout this
+#                       repo - see CLAUDE.md and .claude/skills/problem-pattern).
+#
+# See: src/feature-flag-service/README.md for the full API reference and
+#      the list of feature flags.
+
+set -euo pipefail
+
+BASE_URL="${FEATURE_FLAG_SERVICE_URL:-http://localhost/feature-flag-service}"
+BASE_URL="${BASE_URL%/}"
+
+# Flag ids documented in src/feature-flag-service/README.md as of this
+# writing. Not exhaustive by design (the server is the source of truth) -
+# used only to catch typos early with a clear message.
+KNOWN_FLAGS=(
+  frontend_feature_flag_management
+  db_not_responding
+  ergo_aggregator_slowdown
+  factory_crisis
+  credit_card_meltdown
+  high_cpu_usage
+  credit_card_validation
+)
+
+usage() {
+  cat <<EOF
+Usage: FEATURE_FLAG_STATE=<enable|disable> FEATURE_FLAG_IDS=<id[,id...]> $(basename "$0")
+
+Required environment variables:
+  FEATURE_FLAG_STATE  enable|disable (also accepts true|false, on|off, 1|0)
+  FEATURE_FLAG_IDS    comma-separated flag id(s), e.g. db_not_responding
+                       or db_not_responding,high_cpu_usage
+
+Optional:
+  FEATURE_FLAG_SERVICE_URL  base URL of feature-flag-service
+                            (default: http://localhost/feature-flag-service)
+
+Known flag ids (see src/feature-flag-service/README.md):
+$(printf '  - %s\n' "${KNOWN_FLAGS[@]}")
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "ERROR: required command '$1' not found in PATH." >&2
+    exit 1
+  fi
+}
+require_cmd curl
+
+if [[ -z "${FEATURE_FLAG_STATE:-}" ]]; then
+  echo "ERROR: FEATURE_FLAG_STATE is not set." >&2
+  usage
+  exit 1
+fi
+if [[ -z "${FEATURE_FLAG_IDS:-}" ]]; then
+  echo "ERROR: FEATURE_FLAG_IDS is not set." >&2
+  usage
+  exit 1
+fi
+
+case "${FEATURE_FLAG_STATE,,}" in
+  enable|true|on|1) ENABLED=true ;;
+  disable|false|off|0) ENABLED=false ;;
+  *)
+    echo "ERROR: FEATURE_FLAG_STATE must be enable|disable (got '${FEATURE_FLAG_STATE}')." >&2
+    exit 1
+    ;;
+esac
+
+is_known_flag() {
+  local target="$1" f
+  for f in "${KNOWN_FLAGS[@]}"; do
+    [[ "$f" == "$target" ]] && return 0
+  done
+  return 1
+}
+
+# Splits on commas, trims surrounding whitespace, drops empty entries.
+FLAGS=()
+IFS=',' read -ra raw_flags <<<"$FEATURE_FLAG_IDS"
+for raw in "${raw_flags[@]}"; do
+  flag="$(echo "$raw" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [[ -n "$flag" ]] && FLAGS+=("$flag")
+done
+
+if [[ ${#FLAGS[@]} -eq 0 ]]; then
+  echo "ERROR: FEATURE_FLAG_IDS did not contain any flag ids." >&2
+  exit 1
+fi
+
+for flag in "${FLAGS[@]}"; do
+  if ! is_known_flag "$flag"; then
+    echo "WARNING: '${flag}' is not one of the flags documented in src/feature-flag-service/README.md." >&2
+    echo "         Proceeding anyway - the service will reject it if it truly doesn't exist." >&2
+  fi
+done
+
+# Extracts the boolean value of "enabled" from a GET /v1/flags/{id} response
+# without requiring jq.
+extract_enabled() {
+  echo "$1" | grep -o '"enabled"[[:space:]]*:[[:space:]]*\(true\|false\)' | head -1 | grep -o 'true\|false'
+}
+
+set_flag() {
+  local flag="$1" response http_code body
+  response=$(curl -sS -w '\n%{http_code}' -X PUT "${BASE_URL}/v1/flags/${flag}/" \
+    -H "accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{\"enabled\": ${ENABLED}}")
+  http_code=$(tail -n1 <<<"$response")
+  body=$(sed '$d' <<<"$response")
+
+  if [[ "$http_code" != 2* ]]; then
+    echo "  FAILED  ${flag} -> HTTP ${http_code}: ${body}" >&2
+    return 1
+  fi
+
+  # Confirm by re-fetching, per the convention in
+  # .claude/skills/problem-pattern and .claude/commands/feature-flag-toggle.md
+  local confirm_response confirm_http confirm_body actual
+  confirm_response=$(curl -sS -w '\n%{http_code}' "${BASE_URL}/v1/flags/${flag}" -H "accept: */*")
+  confirm_http=$(tail -n1 <<<"$confirm_response")
+  confirm_body=$(sed '$d' <<<"$confirm_response")
+
+  if [[ "$confirm_http" != 2* ]]; then
+    echo "  SET (unconfirmed)  ${flag} -> PUT succeeded but GET returned HTTP ${confirm_http}" >&2
+    return 0
+  fi
+
+  actual=$(extract_enabled "$confirm_body")
+  if [[ "$actual" == "$ENABLED" ]]; then
+    echo "  OK  ${flag} -> enabled=${actual}"
+  else
+    echo "  MISMATCH  ${flag} -> requested enabled=${ENABLED} but service reports enabled=${actual:-unknown}" >&2
+    return 1
+  fi
+}
+
+echo "Setting ${#FLAGS[@]} flag(s) to enabled=${ENABLED} via ${BASE_URL}"
+failures=0
+for flag in "${FLAGS[@]}"; do
+  if ! set_flag "$flag"; then
+    failures=$((failures + 1))
+  fi
+done
+
+if [[ $failures -gt 0 ]]; then
+  echo "Done with ${failures} failure(s)." >&2
+  exit 1
+fi
+
+echo "Done."
